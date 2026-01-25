@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fluxer Atelier - SEO Description Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0c12;
+      --panel: rgba(20, 24, 32, 0.92);
+      --card: rgba(26, 30, 40, 0.95);
+      --accent: #d4af5a;
+      --accent-2: #a8b3d8;
+      --text: #e8eaf0;
+      --muted: #9ca3af;
+      --border: rgba(212, 175, 90, 0.18);
+      --shadow: 0 24px 56px rgba(0, 0, 0, 0.6);
+      --success: #52c77a;
+      --error: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Space Grotesk", "Manrope", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(240px at 12% 18%, rgba(212, 175, 90, 0.12), transparent),
+        radial-gradient(360px at 86% 12%, rgba(168, 179, 216, 0.15), transparent),
+        radial-gradient(320px at 40% 90%, rgba(212, 175, 90, 0.08), transparent),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      background-attachment: fixed;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(12px);
+      background: linear-gradient(180deg, rgba(10, 12, 18, 0.95), rgba(10, 12, 18, 0.7));
+      padding: 18px clamp(18px, 3vw, 36px);
+      border-bottom: 1px solid rgba(212, 175, 90, 0.2);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      justify-content: space-between;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 12px;
+    }
+
+    .nav-link {
+      padding: 8px 16px;
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--text);
+      background: rgba(212, 175, 90, 0.1);
+    }
+
+    .nav-link.active {
+      color: var(--accent);
+      background: rgba(212, 175, 90, 0.15);
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: 0.4px;
+      font-weight: 600;
+      font-family: "Playfair Display", "Space Grotesk", serif;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .logo-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      position: relative;
+      box-shadow: 0 10px 30px rgba(199, 160, 82, 0.35);
+      overflow: hidden;
+    }
+
+    .logo-mark::after {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border-radius: 8px;
+      border: 2px solid rgba(248, 246, 241, 0.6);
+    }
+
+    main {
+      flex: 1;
+      padding: clamp(20px, 3vw, 40px);
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .page-title {
+      margin: 0 0 8px;
+      font-size: clamp(26px, 4vw, 36px);
+      font-family: "Playfair Display", serif;
+    }
+
+    .page-subtitle {
+      color: var(--muted);
+      margin: 0 0 24px;
+      font-size: 15px;
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--accent);
+      font-family: "Playfair Display", serif;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Generate Button */
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .generate-btn {
+      padding: 14px 28px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, var(--accent), #c9a44e);
+      color: #0a0c12;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .generate-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(212, 175, 90, 0.4);
+    }
+
+    .generate-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .export-btn {
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-left: auto;
+    }
+
+    .export-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      background: rgba(212, 175, 90, 0.1);
+    }
+
+    .export-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Description Card */
+    .description-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .description-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 20px 24px;
+      background: rgba(212, 175, 90, 0.05);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .product-info h3 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      font-family: "Playfair Display", serif;
+      color: var(--text);
+    }
+
+    .product-meta {
+      display: flex;
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    .product-price {
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .products-combined {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .description-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .copy-btn {
+      padding: 10px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .copy-btn.copied {
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    .description-body {
+      padding: 24px;
+    }
+
+    .description-text {
+      font-size: 16px;
+      line-height: 1.8;
+      color: var(--text);
+      margin: 0 0 20px;
+      padding: 20px;
+      background: rgba(212, 175, 90, 0.03);
+      border-radius: 12px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .description-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      padding: 16px 0;
+      border-top: 1px solid rgba(212, 175, 90, 0.1);
+    }
+
+    .stat-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      background: rgba(212, 175, 90, 0.1);
+      color: var(--muted);
+    }
+
+    .stat-tag.words {
+      background: rgba(82, 199, 122, 0.1);
+      color: var(--success);
+    }
+
+    .stat-tag.model {
+      background: rgba(168, 179, 216, 0.1);
+      color: var(--accent-2);
+    }
+
+    .keywords-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(212, 175, 90, 0.1);
+    }
+
+    .keywords-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .keywords-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .keyword-tag {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      background: rgba(168, 179, 216, 0.12);
+      color: var(--accent-2);
+    }
+
+    /* Loading & Empty States */
+    .loading-state,
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--muted);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state-icon {
+      font-size: 56px;
+      margin-bottom: 20px;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      color: var(--text);
+    }
+
+    .empty-state p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .empty-state a {
+      color: var(--accent);
+    }
+
+    /* Back link */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      margin-bottom: 16px;
+      transition: color 0.2s ease;
+    }
+
+    .back-link:hover {
+      color: var(--accent);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .action-bar {
+        flex-direction: column;
+      }
+
+      .generate-btn,
+      .export-btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .export-btn {
+        margin-left: 0;
+      }
+
+      .description-header {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .description-actions {
+        width: 100%;
+      }
+
+      .copy-btn {
+        flex: 1;
+        justify-content: center;
+      }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .error-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--error);
+      background: rgba(239, 68, 68, 0.05);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 16px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="nav">
+      <a href="/" class="logo">
+        <span class="logo-mark"></span>
+        <span>Fluxer Atelier</span>
+      </a>
+      <div class="nav-links">
+        <a href="/" class="nav-link">Extraction</a>
+        <a href="/seo" class="nav-link">SEO Analysis</a>
+        <a href="/generate" class="nav-link active">Generator</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <a href="/seo" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back to SEO Analysis
+    </a>
+
+    <h1 class="page-title">SEO Description Generator</h1>
+    <p class="page-subtitle" id="page-subtitle">Generate a single SEO-optimized product description using AI and your extracted data.</p>
+
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-products">-</div>
+        <div class="stat-label">Products to Combine</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-keywords">-</div>
+        <div class="stat-label">Keywords Available</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-words">-</div>
+        <div class="stat-label">Word Count</div>
+      </div>
+    </div>
+
+    <!-- Action Bar -->
+    <div class="action-bar">
+      <button class="generate-btn" id="generate-btn" disabled>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        Generate Description
+      </button>
+      <button class="export-btn" id="export-txt-btn" disabled>Export TXT</button>
+      <button class="export-btn" id="export-json-btn" disabled>Export JSON</button>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" id="empty-state">
+      <div class="empty-state-icon">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+        </svg>
+      </div>
+      <h3>No Data Available</h3>
+      <p>Complete product extraction and SEO analysis first to generate a description.</p>
+      <p style="margin-top: 12px;"><a href="/">Go to Extraction</a> → <a href="/seo">SEO Analysis</a> → Generate</p>
+    </div>
+
+    <!-- Loading State -->
+    <div class="loading-state hidden" id="loading-state">
+      <div class="loading-spinner"></div>
+      <p id="loading-text">Generating SEO-optimized description...</p>
+      <p style="font-size: 13px; margin-top: 8px;">Combining data from all products with top keywords</p>
+    </div>
+
+    <!-- Error State -->
+    <div class="error-state hidden" id="error-state">
+      <p id="error-text"></p>
+    </div>
+
+    <!-- Description Result -->
+    <div class="description-card hidden" id="description-card">
+      <div class="description-header">
+        <div class="product-info">
+          <h3 id="result-product-name">Product Name</h3>
+          <div class="product-meta">
+            <span class="product-price" id="result-price"></span>
+            <span class="products-combined" id="result-combined"></span>
+          </div>
+        </div>
+        <div class="description-actions">
+          <button class="copy-btn" id="copy-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy
+          </button>
+        </div>
+      </div>
+      <div class="description-body">
+        <p class="description-text" id="result-description"></p>
+
+        <div class="description-stats">
+          <span class="stat-tag words" id="result-words">0 words</span>
+          <span class="stat-tag model" id="result-model">gpt-4o-mini</span>
+        </div>
+
+        <div class="keywords-section">
+          <div class="keywords-label">Keywords Used</div>
+          <div class="keywords-list" id="result-keywords"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // State
+    let extractionResults = [];
+    let seoKeywords = [];
+    let generatedDescription = null;
+
+    // DOM elements
+    const emptyState = document.getElementById('empty-state');
+    const loadingState = document.getElementById('loading-state');
+    const errorState = document.getElementById('error-state');
+    const descriptionCard = document.getElementById('description-card');
+    const generateBtn = document.getElementById('generate-btn');
+    const exportTxtBtn = document.getElementById('export-txt-btn');
+    const exportJsonBtn = document.getElementById('export-json-btn');
+    const copyBtn = document.getElementById('copy-btn');
+
+    // Check for data on load
+    document.addEventListener('DOMContentLoaded', () => {
+      // Get extraction results
+      const storedResults = sessionStorage.getItem('extractionResults');
+      // Get SEO keywords
+      const storedKeywords = sessionStorage.getItem('seoKeywords');
+
+      let hasData = false;
+
+      if (storedResults) {
+        try {
+          extractionResults = JSON.parse(storedResults);
+          if (extractionResults && extractionResults.length > 0) {
+            hasData = true;
+            document.getElementById('stat-products').textContent = extractionResults.length;
+          }
+        } catch (e) {
+          console.error('Error parsing extraction results:', e);
+        }
+      }
+
+      if (storedKeywords) {
+        try {
+          seoKeywords = JSON.parse(storedKeywords);
+          if (seoKeywords && seoKeywords.length > 0) {
+            document.getElementById('stat-keywords').textContent = seoKeywords.length;
+          }
+        } catch (e) {
+          console.error('Error parsing SEO keywords:', e);
+        }
+      }
+
+      // If we have extraction results but no keywords, use a default set
+      if (hasData && (!seoKeywords || seoKeywords.length === 0)) {
+        seoKeywords = generateBasicKeywords(extractionResults);
+        document.getElementById('stat-keywords').textContent = seoKeywords.length;
+      }
+
+      if (hasData) {
+        emptyState.classList.add('hidden');
+        generateBtn.disabled = false;
+        document.getElementById('page-subtitle').textContent =
+          `Ready to generate a single SEO description from ${extractionResults.length} products using ${seoKeywords.length} keywords.`;
+      }
+    });
+
+    // Generate basic keywords from extraction results
+    function generateBasicKeywords(results) {
+      const keywords = new Map();
+
+      results.forEach(result => {
+        const name = result.product_name || result.meta_title || '';
+        const words = name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+
+        words.forEach(word => {
+          if (!keywords.has(word)) {
+            keywords.set(word, { phrase: word, importance_score: 50 });
+          }
+        });
+
+        if (result.features && Array.isArray(result.features)) {
+          result.features.forEach(feature => {
+            const text = typeof feature === 'string' ? feature : (feature.description || '');
+            const featureWords = text.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+            featureWords.slice(0, 3).forEach(word => {
+              if (!keywords.has(word)) {
+                keywords.set(word, { phrase: word, importance_score: 40 });
+              }
+            });
+          });
+        }
+      });
+
+      return Array.from(keywords.values()).slice(0, 50);
+    }
+
+    // Generate description
+    generateBtn.addEventListener('click', async () => {
+      if (extractionResults.length === 0) return;
+
+      generateBtn.disabled = true;
+      emptyState.classList.add('hidden');
+      descriptionCard.classList.add('hidden');
+      errorState.classList.add('hidden');
+      loadingState.classList.remove('hidden');
+
+      try {
+        const response = await fetch('/api/seo/generate-description', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            products: extractionResults,
+            keywords: seoKeywords,
+            config: {
+              model: 'gpt-4o-mini',
+              temperature: 0.7
+            }
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'error') {
+          throw new Error(data.message);
+        }
+
+        generatedDescription = data.result;
+        renderDescription();
+
+        // Enable export buttons
+        exportTxtBtn.disabled = false;
+        exportJsonBtn.disabled = false;
+
+        // Update word count stat
+        document.getElementById('stat-words').textContent = generatedDescription.word_count;
+
+      } catch (error) {
+        console.error('Generation error:', error);
+        loadingState.classList.add('hidden');
+        errorState.classList.remove('hidden');
+        document.getElementById('error-text').textContent = `Generation failed: ${error.message}`;
+      } finally {
+        generateBtn.disabled = false;
+      }
+    });
+
+    // Render the generated description
+    function renderDescription() {
+      loadingState.classList.add('hidden');
+      descriptionCard.classList.remove('hidden');
+
+      document.getElementById('result-product-name').textContent = generatedDescription.product_name;
+
+      const priceEl = document.getElementById('result-price');
+      if (generatedDescription.price) {
+        priceEl.textContent = generatedDescription.price;
+        priceEl.style.display = '';
+      } else {
+        priceEl.style.display = 'none';
+      }
+
+      document.getElementById('result-combined').textContent =
+        `Combined from ${generatedDescription.products_combined} products`;
+
+      document.getElementById('result-description').textContent = generatedDescription.description;
+      document.getElementById('result-words').textContent = `${generatedDescription.word_count} words`;
+      document.getElementById('result-model').textContent = generatedDescription.model_used;
+
+      // Render keywords
+      const keywordsEl = document.getElementById('result-keywords');
+      if (generatedDescription.keywords_used && generatedDescription.keywords_used.length > 0) {
+        keywordsEl.innerHTML = generatedDescription.keywords_used
+          .map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`)
+          .join('');
+      } else {
+        keywordsEl.innerHTML = '<span style="color: var(--muted);">No keywords specified</span>';
+      }
+    }
+
+    // Copy description to clipboard
+    copyBtn.addEventListener('click', async () => {
+      if (!generatedDescription || !generatedDescription.description) return;
+
+      try {
+        await navigator.clipboard.writeText(generatedDescription.description);
+
+        copyBtn.classList.add('copied');
+        copyBtn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          Copied!
+        `;
+
+        setTimeout(() => {
+          copyBtn.classList.remove('copied');
+          copyBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy
+          `;
+        }, 2000);
+      } catch (error) {
+        console.error('Copy failed:', error);
+      }
+    });
+
+    // Export as TXT
+    exportTxtBtn.addEventListener('click', async () => {
+      if (!generatedDescription) return;
+
+      try {
+        const response = await fetch('/api/seo/export-description', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description: generatedDescription,
+            format: 'txt'
+          })
+        });
+
+        const blob = await response.blob();
+        downloadBlob(blob, 'seo_description.txt');
+      } catch (error) {
+        console.error('Export error:', error);
+        alert('Export failed: ' + error.message);
+      }
+    });
+
+    // Export as JSON
+    exportJsonBtn.addEventListener('click', async () => {
+      if (!generatedDescription) return;
+
+      try {
+        const response = await fetch('/api/seo/export-description', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description: generatedDescription,
+            format: 'json'
+          })
+        });
+
+        const blob = await response.blob();
+        downloadBlob(blob, 'seo_description.json');
+      } catch (error) {
+        console.error('Export error:', error);
+        alert('Export failed: ' + error.message);
+      }
+    });
+
+    // Download blob helper
+    function downloadBlob(blob, filename) {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

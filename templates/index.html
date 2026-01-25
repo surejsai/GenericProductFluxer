@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fluxer Atelier - Product Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0c12;
+      --panel: rgba(20, 24, 32, 0.92);
+      --card: rgba(26, 30, 40, 0.95);
+      --accent: #d4af5a;
+      --accent-2: #a8b3d8;
+      --text: #e8eaf0;
+      --muted: #9ca3af;
+      --border: rgba(212, 175, 90, 0.18);
+      --shadow: 0 24px 56px rgba(0, 0, 0, 0.6);
+      --success: #52c77a;
+      --error: #ef4444;
+      --mouse-x: 50%;
+      --mouse-y: 50%;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Space Grotesk", "Manrope", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(240px at 12% 18%, rgba(212, 175, 90, 0.12), transparent),
+        radial-gradient(360px at 86% 12%, rgba(168, 179, 216, 0.15), transparent),
+        radial-gradient(320px at 40% 90%, rgba(212, 175, 90, 0.08), transparent),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      background-attachment: fixed;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(12px);
+      background: linear-gradient(180deg, rgba(10, 12, 18, 0.95), rgba(10, 12, 18, 0.7));
+      padding: 18px clamp(18px, 3vw, 36px);
+      border-bottom: 1px solid rgba(212, 175, 90, 0.2);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: 0.4px;
+      font-weight: 600;
+      font-family: "Playfair Display", "Space Grotesk", serif;
+    }
+
+    .logo-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      position: relative;
+      box-shadow: 0 10px 30px rgba(199, 160, 82, 0.35);
+      overflow: hidden;
+    }
+
+    .logo-mark::after {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border-radius: 8px;
+      border: 2px solid rgba(248, 246, 241, 0.6);
+      box-shadow: inset 0 0 0 1px rgba(199, 160, 82, 0.3);
+    }
+
+    .page-indicator {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .page-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(199, 160, 82, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .page-dot.active {
+      width: 24px;
+      border-radius: 4px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    }
+
+    .page {
+      position: relative;
+      flex: 1;
+      display: grid;
+      place-items: center;
+      padding: clamp(28px, 4vw, 48px);
+      overflow: hidden;
+    }
+
+    canvas#neuron-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      filter: blur(0.1px);
+      opacity: 0.95;
+    }
+
+    .content-shell {
+      position: relative;
+      z-index: 1;
+      max-width: 720px;
+      width: min(90vw, 720px);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: clamp(24px, 3vw, 36px);
+      transform-style: preserve-3d;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .content-shell.wide {
+      max-width: 1200px;
+      width: min(95vw, 1200px);
+    }
+
+    .content-shell h1 {
+      margin: 0 0 10px;
+      font-size: clamp(26px, 4vw, 38px);
+      letter-spacing: -0.02em;
+      font-family: "Playfair Display", "Space Grotesk", serif;
+    }
+
+    .content-shell h2 {
+      margin: 0 0 16px;
+      font-size: clamp(20px, 3vw, 28px);
+      letter-spacing: -0.01em;
+      font-family: "Playfair Display", serif;
+      color: var(--accent);
+    }
+
+    .content-shell p {
+      margin: 0 0 20px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .field {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+      letter-spacing: -0.01em;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(212, 175, 90, 0.25);
+      background: rgba(15, 18, 26, 0.85);
+      color: var(--text);
+      font-family: "Manrope", system-ui, sans-serif;
+      font-size: 15px;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: rgba(212, 175, 90, 0.65);
+      box-shadow: 0 0 0 3px rgba(212, 175, 90, 0.15);
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #0a0c12;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 12px 24px rgba(212, 175, 90, 0.3);
+      transition: transform 0.15s ease, box-shadow 0.2s ease;
+      font-size: 15px;
+    }
+
+    button.primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 28px rgba(212, 175, 90, 0.4);
+    }
+
+    button.primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Page transitions */
+    .page-content {
+      display: none;
+      animation: fadeIn 0.5s ease;
+    }
+
+    .page-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Loading states */
+    .loading-list {
+      list-style: none;
+      padding: 0;
+      margin: 20px 0;
+    }
+
+    .loading-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      margin-bottom: 8px;
+      background: rgba(26, 30, 40, 0.6);
+      border-radius: 12px;
+      border: 1px solid rgba(212, 175, 90, 0.2);
+    }
+
+    .loading-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(199, 160, 82, 0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .loading-spinner.success {
+      border: 2px solid var(--success);
+      border-top-color: var(--success);
+      animation: none;
+    }
+
+    .loading-spinner.success::after {
+      content: "✓";
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--success);
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    .loading-spinner.error {
+      border: 2px solid var(--error);
+      border-top-color: var(--error);
+      animation: none;
+    }
+
+    .loading-spinner.error::after {
+      content: "✗";
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--error);
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      flex: 1;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .loading-text.success {
+      color: var(--success);
+      font-weight: 600;
+    }
+
+    .loading-text.error {
+      color: var(--error);
+    }
+
+    /* Results display */
+    .results-grid {
+      display: grid;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .product-card {
+      background: rgba(26, 30, 40, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .product-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      border-color: rgba(212, 175, 90, 0.3);
+    }
+
+    .product-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .product-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0 0 4px;
+    }
+
+    .confidence-badge {
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .confidence-high {
+      background: rgba(82, 199, 122, 0.2);
+      color: var(--success);
+    }
+
+    .confidence-medium {
+      background: rgba(199, 160, 82, 0.2);
+      color: var(--accent);
+    }
+
+    .confidence-low {
+      background: rgba(231, 76, 60, 0.2);
+      color: var(--error);
+    }
+
+    .product-meta {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .product-description {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .product-footer {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid rgba(199, 160, 82, 0.15);
+    }
+
+    .method-tag {
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      background: rgba(151, 160, 196, 0.15);
+      color: var(--accent-2);
+    }
+
+    .error-message {
+      background: rgba(231, 76, 60, 0.1);
+      border: 1px solid rgba(231, 76, 60, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 20px 0;
+      color: var(--error);
+    }
+
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(199, 160, 82, 0.18);
+    }
+
+    button.secondary {
+      background: rgba(26, 30, 40, 0.9);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 10px 20px;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button.secondary:hover {
+      background: rgba(32, 36, 46, 1);
+      border-color: var(--accent);
+    }
+
+    footer {
+      padding: 16px clamp(18px, 3vw, 36px);
+      color: var(--muted);
+      border-top: 1px solid rgba(212, 175, 90, 0.18);
+      background: rgba(10, 12, 18, 0.8);
+      backdrop-filter: blur(8px);
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .product-header {
+        flex-direction: column;
+      }
+
+      .confidence-badge {
+        align-self: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="nav">
+      <div class="logo">
+        <div class="logo-mark" aria-hidden="true"></div>
+        Fluxer Atelier
+      </div>
+      <div class="page-indicator">
+        <div class="page-dot active" data-page="1"></div>
+        <div class="page-dot" data-page="2"></div>
+        <div class="page-dot" data-page="3"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <canvas id="neuron-layer"></canvas>
+
+    <!-- Page 1: Query Input -->
+    <section id="page-1" class="page-content active">
+      <div class="content-shell">
+        <h1>Discover Product Intelligence</h1>
+        <p>Enter any product search query to discover the most popular products and extract detailed information from across the web.</p>
+
+        <div class="field">
+          <label for="query-input">What product are you looking for?</label>
+          <input
+            type="text"
+            id="query-input"
+            placeholder="e.g., wireless headphones, coffee maker, smart watch..."
+            autocomplete="off"
+          />
+          <p class="hint">Try: "range hood", "microwave", "gaming laptop"</p>
+        </div>
+
+        <button class="primary" id="start-btn" type="button">
+          Start Discovery
+        </button>
+      </div>
+    </section>
+
+    <!-- Page 2: Loading Progress -->
+    <section id="page-2" class="page-content">
+      <div class="content-shell">
+        <h1>Processing Your Request</h1>
+        <p id="loading-subtitle">Searching for popular products...</p>
+
+        <ul class="loading-list" id="loading-list">
+          <!-- Loading items will be dynamically added -->
+        </ul>
+
+        <div id="error-container"></div>
+      </div>
+    </section>
+
+    <!-- Page 3: Results Display -->
+    <section id="page-3" class="page-content">
+      <div class="content-shell wide">
+        <h1>Extracted Product Intelligence</h1>
+        <p id="results-subtitle">Found <span id="results-count">0</span> products with detailed information</p>
+
+        <div class="results-grid" id="results-grid">
+          <!-- Results will be dynamically added -->
+        </div>
+
+        <div class="action-bar">
+          <button class="secondary" id="back-btn">
+            ← New Search
+          </button>
+          <button class="secondary" id="seo-btn" style="background: linear-gradient(135deg, rgba(168, 179, 216, 0.2), rgba(212, 175, 90, 0.2)); border-color: var(--accent-2);">
+            Analyze SEO Keywords
+          </button>
+          <button class="primary" id="export-btn">
+            Export Results
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Fluxer Atelier · Powered by SERP API & ScraperAPI · Advanced NLP Product Extraction
+  </footer>
+
+  <script>
+    // ==========================
+    // Canvas Background Animation
+    // ==========================
+    const canvas = document.getElementById("neuron-layer");
+    const ctx = canvas.getContext("2d");
+    const nodes = [];
+    const nodeCount = 48;
+    const maxDist = 180;
+    const pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+    const resize = () => {
+      const stage = document.querySelector(".page");
+      canvas.width = stage.clientWidth;
+      canvas.height = stage.clientHeight;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    for (let i = 0; i < nodeCount; i++) {
+      nodes.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.35,
+        vy: (Math.random() - 0.5) * 0.35,
+        size: 1 + Math.random() * 2.2,
+      });
+    }
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      nodes.forEach((n) => {
+        n.x += n.vx;
+        n.y += n.vy;
+        if (n.x < -20) n.x = canvas.width + 20;
+        if (n.x > canvas.width + 20) n.x = -20;
+        if (n.y < -20) n.y = canvas.height + 20;
+        if (n.y > canvas.height + 20) n.y = -20;
+      });
+
+      for (let i = 0; i < nodeCount; i++) {
+        const a = nodes[i];
+        const gradient = ctx.createRadialGradient(a.x, a.y, 0, a.x, a.y, 14);
+        gradient.addColorStop(0, "rgba(212,175,90,0.65)");
+        gradient.addColorStop(1, "rgba(168,179,216,0.12)");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, a.size + 1.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        for (let j = i + 1; j < nodeCount; j++) {
+          const b = nodes[j];
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < maxDist) {
+            const alpha = 1 - dist / maxDist;
+            ctx.strokeStyle = `rgba(168,179,216,${alpha * 0.75})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+
+        const pdx = a.x - pointer.x;
+        const pdy = a.y - pointer.y;
+        const pdist = Math.hypot(pdx, pdy);
+        if (pdist < maxDist * 1.2) {
+          const alpha = 1 - pdist / (maxDist * 1.2);
+          ctx.strokeStyle = `rgba(212,175,90,${alpha * 0.95})`;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(pointer.x, pointer.y);
+          ctx.stroke();
+        }
+      }
+
+      requestAnimationFrame(draw);
+    };
+    draw();
+
+    window.addEventListener("pointermove", (e) => {
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+    });
+
+    // ==========================
+    // Application Logic
+    // ==========================
+    let currentProducts = [];
+    let currentQuery = '';
+
+    // Page navigation
+    function showPage(pageNum) {
+      document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+      document.getElementById(`page-${pageNum}`).classList.add('active');
+
+      document.querySelectorAll('.page-dot').forEach(dot => {
+        dot.classList.remove('active');
+        if (dot.dataset.page === String(pageNum)) {
+          dot.classList.add('active');
+        }
+      });
+    }
+
+    // Add loading item
+    function addLoadingItem(text, id) {
+      const list = document.getElementById('loading-list');
+      const item = document.createElement('li');
+      item.className = 'loading-item';
+      item.id = id;
+      item.innerHTML = `
+        <div class="loading-spinner"></div>
+        <div class="loading-text">${text}</div>
+      `;
+      list.appendChild(item);
+      return item;
+    }
+
+    // Update loading item
+    function updateLoadingItem(id, text, status = 'loading') {
+      const item = document.getElementById(id);
+      if (!item) return;
+
+      const spinner = item.querySelector('.loading-spinner');
+      const textEl = item.querySelector('.loading-text');
+
+      textEl.textContent = text;
+
+      if (status === 'success') {
+        spinner.classList.add('success');
+        textEl.classList.add('success');
+      } else if (status === 'error') {
+        spinner.classList.add('error');
+        textEl.classList.add('error');
+      }
+    }
+
+    // Show error
+    function showError(message) {
+      const container = document.getElementById('error-container');
+      container.innerHTML = `
+        <div class="error-message">
+          <strong>Error:</strong> ${message}
+        </div>
+      `;
+    }
+
+    // Start button handler
+    document.getElementById('start-btn').addEventListener('click', async () => {
+      const query = document.getElementById('query-input').value.trim();
+
+      if (!query) {
+        alert('Please enter a product search query');
+        return;
+      }
+
+      currentQuery = query;
+
+      // Move to page 2
+      showPage(2);
+      document.getElementById('loading-list').innerHTML = '';
+      document.getElementById('error-container').innerHTML = '';
+      document.getElementById('loading-subtitle').textContent = 'Searching for popular products...';
+
+      try {
+        // Step 1: Search for products
+        const searchItem = addLoadingItem('Searching for popular products...', 'search-products');
+
+        const searchResponse = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
+
+        const searchData = await searchResponse.json();
+
+        if (searchData.status === 'error') {
+          throw new Error(searchData.message);
+        }
+
+        updateLoadingItem('search-products', `Found ${searchData.count} products (10 fetched, targeting 5 extractions)`, 'success');
+        currentProducts = searchData.products;
+
+        // Step 2: Show extraction starting
+        await new Promise(resolve => setTimeout(resolve, 500));
+        document.getElementById('loading-subtitle').textContent = 'Extracting product descriptions in parallel...';
+
+        // Show first 5 products as primary targets
+        const primaryCount = Math.min(5, currentProducts.length);
+        const backupCount = Math.max(0, currentProducts.length - 5);
+
+        addLoadingItem(`Extracting first ${primaryCount} products in parallel...`, 'extract-primary');
+        if (backupCount > 0) {
+          addLoadingItem(`${backupCount} backup products available for failures`, 'extract-backup');
+        }
+
+        // Step 3: Call batch extraction endpoint
+        const extractResponse = await fetch('/api/extract-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            products: currentProducts,
+            target_count: 5
+          })
+        });
+
+        const extractData = await extractResponse.json();
+
+        if (extractData.status === 'error') {
+          throw new Error(extractData.message);
+        }
+
+        // Update loading items based on results
+        const successCount = extractData.total_successful;
+        const failCount = extractData.total_failed;
+        const backupsUsed = extractData.backups_used?.length || 0;
+
+        updateLoadingItem('extract-primary', `Extraction complete: ${successCount} successful`, 'success');
+
+        if (backupCount > 0) {
+          if (backupsUsed > 0) {
+            updateLoadingItem('extract-backup', `${backupsUsed} backup(s) used to replace failures`, 'success');
+          } else if (failCount === 0) {
+            updateLoadingItem('extract-backup', `No backups needed - all primary extractions succeeded`, 'success');
+          } else {
+            updateLoadingItem('extract-backup', `${failCount} extraction(s) failed`, 'error');
+          }
+        }
+
+        // Show individual results summary
+        if (failCount > 0) {
+          const failedItem = addLoadingItem(`${failCount} product(s) failed extraction`, 'failed-summary');
+          updateLoadingItem('failed-summary', `${failCount} product(s) failed extraction`, 'error');
+        }
+
+        // Wait a moment then show results
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        // Combine results for display (successful first, then failed)
+        const allResults = [
+          ...extractData.results,
+          ...extractData.failed.map(f => ({ ...f, error: f.error || 'Extraction failed' }))
+        ];
+
+        // Store successful results for SEO analysis
+        const successfulResults = extractData.results.filter(r => !r.error);
+        if (successfulResults.length > 0) {
+          sessionStorage.setItem('extractionResults', JSON.stringify(successfulResults));
+        }
+
+        displayResults(allResults, extractData.backups_used || []);
+        showPage(3);
+
+      } catch (error) {
+        console.error('Error:', error);
+        showError(error.message);
+      }
+    });
+
+    // Display results
+    function displayResults(results, backupsUsed = []) {
+      const grid = document.getElementById('results-grid');
+      const successResults = results.filter(r => !r.error);
+      const failedResults = results.filter(r => r.error);
+
+      document.getElementById('results-count').textContent = successResults.length;
+
+      let subtitle = `Found ${successResults.length} products with detailed information`;
+      if (failedResults.length > 0) {
+        subtitle += ` (${failedResults.length} failed)`;
+      }
+      if (backupsUsed.length > 0) {
+        subtitle += ` - ${backupsUsed.length} backup(s) used`;
+      }
+      document.getElementById('results-subtitle').textContent = subtitle;
+
+      grid.innerHTML = '';
+
+      // Show successful results first
+      successResults.forEach((result, index) => {
+        const card = document.createElement('div');
+        card.className = 'product-card';
+
+        const confidenceClass =
+          result.confidence_score >= 0.8 ? 'confidence-high' :
+          result.confidence_score >= 0.6 ? 'confidence-medium' :
+          'confidence-low';
+
+        const confidenceText =
+          result.confidence_score >= 0.8 ? 'High' :
+          result.confidence_score >= 0.6 ? 'Medium' :
+          'Low';
+
+        const isBackup = result.is_backup;
+        const backupBadge = isBackup ? '<span class="method-tag" style="background: rgba(168, 179, 216, 0.2); color: var(--accent-2);">Backup</span>' : '';
+
+        card.innerHTML = `
+          <div class="product-header">
+            <div>
+              <h3 class="product-title">${result.title}</h3>
+              <p class="product-meta">${result.meta_title || 'No meta title'}</p>
+              ${result.price ? `<p class="product-meta" style="color: var(--accent);">${result.price} · ${result.source || 'Unknown source'}</p>` : ''}
+            </div>
+            <span class="confidence-badge ${confidenceClass}">${confidenceText} (${(result.confidence_score * 100).toFixed(0)}%)</span>
+          </div>
+
+          ${result.meta_description ? `
+            <p class="product-meta"><strong>Meta:</strong> ${result.meta_description}</p>
+          ` : ''}
+
+          ${result.product_description ? `
+            <div class="product-description">${result.product_description}</div>
+          ` : '<p class="product-meta" style="color: var(--error);">No description extracted</p>'}
+
+          <div class="product-footer">
+            <span class="method-tag">${result.extraction_method || 'unknown'}</span>
+            ${backupBadge}
+            ${result.url ? `<a href="${result.url}" target="_blank" style="color: var(--accent); font-size: 12px; text-decoration: none;">View Source →</a>` : ''}
+          </div>
+        `;
+
+        grid.appendChild(card);
+      });
+
+      // Show failed results at the end
+      if (failedResults.length > 0) {
+        const failedSection = document.createElement('div');
+        failedSection.style.cssText = 'grid-column: 1 / -1; margin-top: 20px;';
+        failedSection.innerHTML = `
+          <h3 style="color: var(--error); margin-bottom: 12px; font-size: 16px;">
+            Failed Extractions (${failedResults.length})
+          </h3>
+        `;
+        grid.appendChild(failedSection);
+
+        failedResults.forEach((result) => {
+          const card = document.createElement('div');
+          card.className = 'product-card';
+          card.style.cssText = 'border-color: rgba(239, 68, 68, 0.3); opacity: 0.8;';
+
+          card.innerHTML = `
+            <div class="product-header">
+              <div>
+                <h3 class="product-title">${result.title}</h3>
+                ${result.price ? `<p class="product-meta">${result.price} · ${result.source || 'Unknown source'}</p>` : ''}
+              </div>
+              <span class="confidence-badge confidence-low">Failed</span>
+            </div>
+            <p class="error-message" style="margin: 8px 0;">${result.error}</p>
+            <div class="product-footer">
+              ${result.url ? `<a href="${result.url}" target="_blank" style="color: var(--muted); font-size: 12px; text-decoration: none;">View URL →</a>` : ''}
+            </div>
+          `;
+
+          grid.appendChild(card);
+        });
+      }
+    }
+
+    // Back button
+    document.getElementById('back-btn').addEventListener('click', () => {
+      document.getElementById('query-input').value = '';
+      currentProducts = [];
+      currentQuery = '';
+      showPage(1);
+    });
+
+    // Export button
+    document.getElementById('export-btn').addEventListener('click', () => {
+      const data = {
+        query: currentQuery,
+        timestamp: new Date().toISOString(),
+        products: currentProducts
+      };
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fluxer-${currentQuery.replace(/\s+/g, '-')}-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // SEO Analysis button
+    document.getElementById('seo-btn').addEventListener('click', () => {
+      // Navigate to SEO analysis page (data already stored in sessionStorage)
+      window.location.href = '/seo';
+    });
+
+    // Enter key handler
+    document.getElementById('query-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('start-btn').click();
+      }
+    });
+  </script>
+</body>
+</html>

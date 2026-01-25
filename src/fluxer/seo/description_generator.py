@@ -1,0 +1,384 @@
+"""
+SEO Description Generator using OpenAI ChatGPT.
+
+Generates a single SEO-optimized product description paragraph using
+combined extracted product data and TF-IDF keywords.
+"""
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Any
+import json
+
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+from ..logger import get_logger
+
+logger = get_logger(__name__)
+
+
+# System message for ChatGPT
+SYSTEM_MESSAGE = """You are a professional ecommerce SEO copywriter.
+Write accurate, natural product descriptions.
+Never invent features, materials, sizes, performance claims, or specifications.
+Only use facts that appear in the provided Source Text."""
+
+
+# User prompt template
+USER_PROMPT_TEMPLATE = """Write ONE SEO-friendly product description paragraph (70–120 words).
+
+Product name: {product_name}
+Price (optional mention): {price}
+
+Source Text (facts only, do not go beyond this):
+{source_text}
+
+Recommended Keywords / Phrases (use 6–10 naturally, no stuffing):
+{keywords_list}
+
+Guidelines:
+- First sentence: include the product name and a primary keyword.
+- Middle: weave in remaining keywords while describing real features from Source Text.
+- End: brief benefit statement or call-to-action.
+- Do NOT hallucinate specs, dimensions, or features not in Source Text.
+- Output ONLY the paragraph—no headings, bullet points, or meta commentary."""
+
+
+@dataclass
+class GeneratedDescription:
+    """Result of description generation."""
+    product_name: str
+    price: Optional[str]
+    source_text: str
+    keywords_used: List[str]
+    description: str
+    word_count: int
+    model_used: str
+    products_combined: int = 1
+    success: bool = True
+    error: Optional[str] = None
+
+
+@dataclass
+class DescriptionGenerator:
+    """
+    Generates a single SEO-optimized product description using OpenAI ChatGPT.
+
+    Combines data from multiple product extractions and keywords into
+    one unified description.
+
+    Attributes:
+        model: OpenAI model to use
+        temperature: Creativity level (0.0-1.0)
+        max_tokens: Maximum tokens in response
+        target_word_count: Target word count range (min, max)
+        keywords_to_use: Number of keywords to include (min, max)
+    """
+    model: str = "gpt-4o-mini"
+    temperature: float = 0.7
+    max_tokens: int = 300
+    target_word_count: tuple = (70, 120)
+    keywords_to_use: tuple = (6, 10)
+    api_key: Optional[str] = None
+
+    _client: Any = field(default=None, repr=False, init=False)
+
+    def __post_init__(self):
+        """Initialize OpenAI client."""
+        if not OPENAI_AVAILABLE:
+            logger.warning("OpenAI package not installed. Install with: pip install openai")
+            return
+
+        key = self.api_key or os.getenv("OPENAI_API_KEY")
+        if key:
+            self._client = OpenAI(api_key=key)
+            logger.info(f"OpenAI client initialized with model: {self.model}")
+        else:
+            logger.warning("OPENAI_API_KEY not set. Description generation will fail.")
+
+    def _extract_text_from_product(self, product_data: Dict) -> str:
+        """
+        Extract relevant text from a single product.
+
+        Args:
+            product_data: Extracted product data
+
+        Returns:
+            Concatenated text from the product
+        """
+        parts = []
+
+        # Add features if available
+        features = product_data.get("features") or product_data.get("product_features")
+        if features:
+            if isinstance(features, list):
+                for f in features:
+                    if isinstance(f, dict):
+                        # Handle feature objects with heading/description
+                        heading = f.get("heading", "")
+                        desc = f.get("description", "")
+                        if heading and desc:
+                            parts.append(f"{heading}: {desc}")
+                        elif desc:
+                            parts.append(desc)
+                    else:
+                        parts.append(str(f))
+            else:
+                parts.append(str(features))
+
+        # Add additional information
+        additional = product_data.get("additional_information") or product_data.get("additional_details")
+        if additional:
+            if isinstance(additional, dict):
+                for k, v in additional.items():
+                    parts.append(f"{k}: {v}")
+            elif isinstance(additional, list):
+                parts.extend(str(a) for a in additional)
+            else:
+                parts.append(str(additional))
+
+        # Add product description if available
+        description = product_data.get("product_description") or product_data.get("description")
+        if description:
+            parts.append(description)
+
+        return "; ".join(parts) if parts else ""
+
+    def _build_combined_source_text(self, products: List[Dict]) -> str:
+        """
+        Build combined source text from all product extractions.
+
+        Args:
+            products: List of extracted product data
+
+        Returns:
+            Combined source text from all products
+        """
+        all_text_parts = []
+
+        for product in products:
+            product_text = self._extract_text_from_product(product)
+            if product_text:
+                all_text_parts.append(product_text)
+
+        # Combine and deduplicate key information
+        combined = "\n".join(all_text_parts)
+
+        # Truncate if too long (keep under ~2000 chars for better results)
+        if len(combined) > 2000:
+            combined = combined[:2000] + "..."
+
+        return combined if combined else "No source text available."
+
+    def _get_primary_product_name(self, products: List[Dict]) -> str:
+        """
+        Get the primary product name from the list of products.
+
+        Args:
+            products: List of extracted product data
+
+        Returns:
+            Primary product name (from first product with a name)
+        """
+        for product in products:
+            name = (
+                product.get("product_name") or
+                product.get("title") or
+                product.get("meta_title")
+            )
+            if name:
+                return name
+
+        return "Product"
+
+    def _get_price_range(self, products: List[Dict]) -> Optional[str]:
+        """
+        Get price or price range from products.
+
+        Args:
+            products: List of extracted product data
+
+        Returns:
+            Price string or None
+        """
+        prices = []
+        for product in products:
+            price = product.get("price")
+            if price:
+                prices.append(price)
+
+        if not prices:
+            return None
+        elif len(prices) == 1:
+            return prices[0]
+        else:
+            # Return first price (most relevant)
+            return prices[0]
+
+    def _select_keywords(self, keywords: List[Dict], count: int = 8) -> List[str]:
+        """
+        Select top keywords for use in description.
+
+        Args:
+            keywords: List of keyword dicts with 'phrase' and 'importance_score'
+            count: Number of keywords to select
+
+        Returns:
+            List of keyword phrases
+        """
+        # Sort by importance score if available
+        sorted_kw = sorted(
+            keywords,
+            key=lambda x: x.get("importance_score", x.get("tfidf_score", 0)),
+            reverse=True
+        )
+
+        # Take top N keywords
+        selected = []
+        for kw in sorted_kw[:count]:
+            phrase = kw.get("phrase", kw.get("keyword", ""))
+            if phrase and phrase not in selected:
+                selected.append(phrase)
+
+        return selected
+
+    def generate(
+        self,
+        products: List[Dict],
+        keywords: List[Dict],
+        product_name: Optional[str] = None,
+        price: Optional[str] = None
+    ) -> GeneratedDescription:
+        """
+        Generate a single SEO-optimized description from all products and keywords.
+
+        Args:
+            products: List of extracted product data to combine
+            keywords: List of SEO keywords from TF-IDF analysis
+            product_name: Optional override for product name
+            price: Optional override for price
+
+        Returns:
+            GeneratedDescription with the generated text
+        """
+        # Determine product name and price
+        final_product_name = product_name or self._get_primary_product_name(products)
+        final_price = price or self._get_price_range(products)
+
+        if not OPENAI_AVAILABLE:
+            return GeneratedDescription(
+                product_name=final_product_name,
+                price=final_price,
+                source_text="",
+                keywords_used=[],
+                description="",
+                word_count=0,
+                model_used=self.model,
+                products_combined=len(products),
+                success=False,
+                error="OpenAI package not installed. Install with: pip install openai"
+            )
+
+        if not self._client:
+            return GeneratedDescription(
+                product_name=final_product_name,
+                price=final_price,
+                source_text="",
+                keywords_used=[],
+                description="",
+                word_count=0,
+                model_used=self.model,
+                products_combined=len(products),
+                success=False,
+                error="OpenAI API key not configured. Set OPENAI_API_KEY environment variable."
+            )
+
+        # Build combined source text from all products
+        source_text = self._build_combined_source_text(products)
+
+        # Select keywords
+        num_keywords = (self.keywords_to_use[0] + self.keywords_to_use[1]) // 2
+        selected_keywords = self._select_keywords(keywords, num_keywords)
+        keywords_list = ", ".join(selected_keywords)
+
+        # Build user prompt
+        user_prompt = USER_PROMPT_TEMPLATE.format(
+            product_name=final_product_name,
+            price=final_price or "N/A",
+            source_text=source_text,
+            keywords_list=keywords_list
+        )
+
+        try:
+            # Call OpenAI API
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_MESSAGE},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=self.temperature,
+                max_tokens=self.max_tokens
+            )
+
+            # Extract generated description
+            description = response.choices[0].message.content.strip()
+            word_count = len(description.split())
+
+            logger.info(f"Generated description for '{final_product_name}': {word_count} words (from {len(products)} products)")
+
+            return GeneratedDescription(
+                product_name=final_product_name,
+                price=final_price,
+                source_text=source_text,
+                keywords_used=selected_keywords,
+                description=description,
+                word_count=word_count,
+                model_used=self.model,
+                products_combined=len(products),
+                success=True
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to generate description: {e}")
+            return GeneratedDescription(
+                product_name=final_product_name,
+                price=final_price,
+                source_text=source_text,
+                keywords_used=selected_keywords,
+                description="",
+                word_count=0,
+                model_used=self.model,
+                products_combined=len(products),
+                success=False,
+                error=str(e)
+            )
+
+
+def generate_description_from_analysis(
+    extraction_results: List[Dict],
+    seo_phrases: List[Dict],
+    product_name: Optional[str] = None,
+    model: str = "gpt-4o-mini",
+    api_key: Optional[str] = None
+) -> GeneratedDescription:
+    """
+    Convenience function to generate a single description from extraction and SEO analysis results.
+
+    Args:
+        extraction_results: Results from product extraction
+        seo_phrases: Phrases from SEO analysis
+        product_name: Optional product name override
+        model: OpenAI model to use
+        api_key: Optional API key
+
+    Returns:
+        Single generated description
+    """
+    generator = DescriptionGenerator(model=model, api_key=api_key)
+    return generator.generate(extraction_results, seo_phrases, product_name=product_name)

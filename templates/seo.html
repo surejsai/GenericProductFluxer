@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fluxer Atelier - SEO Keyword Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0c12;
+      --panel: rgba(20, 24, 32, 0.92);
+      --card: rgba(26, 30, 40, 0.95);
+      --accent: #d4af5a;
+      --accent-2: #a8b3d8;
+      --text: #e8eaf0;
+      --muted: #9ca3af;
+      --border: rgba(212, 175, 90, 0.18);
+      --shadow: 0 24px 56px rgba(0, 0, 0, 0.6);
+      --success: #52c77a;
+      --error: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Space Grotesk", "Manrope", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(240px at 12% 18%, rgba(212, 175, 90, 0.12), transparent),
+        radial-gradient(360px at 86% 12%, rgba(168, 179, 216, 0.15), transparent),
+        radial-gradient(320px at 40% 90%, rgba(212, 175, 90, 0.08), transparent),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      background-attachment: fixed;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(12px);
+      background: linear-gradient(180deg, rgba(10, 12, 18, 0.95), rgba(10, 12, 18, 0.7));
+      padding: 18px clamp(18px, 3vw, 36px);
+      border-bottom: 1px solid rgba(212, 175, 90, 0.2);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      justify-content: space-between;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 12px;
+    }
+
+    .nav-link {
+      padding: 8px 16px;
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--text);
+      background: rgba(212, 175, 90, 0.1);
+    }
+
+    .nav-link.active {
+      color: var(--accent);
+      background: rgba(212, 175, 90, 0.15);
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: 0.4px;
+      font-weight: 600;
+      font-family: "Playfair Display", "Space Grotesk", serif;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .logo-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      position: relative;
+      box-shadow: 0 10px 30px rgba(199, 160, 82, 0.35);
+      overflow: hidden;
+    }
+
+    .logo-mark::after {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border-radius: 8px;
+      border: 2px solid rgba(248, 246, 241, 0.6);
+    }
+
+    main {
+      flex: 1;
+      padding: clamp(20px, 3vw, 40px);
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .page-title {
+      margin: 0 0 8px;
+      font-size: clamp(26px, 4vw, 36px);
+      font-family: "Playfair Display", serif;
+    }
+
+    .page-subtitle {
+      color: var(--muted);
+      margin: 0 0 24px;
+      font-size: 15px;
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--accent);
+      font-family: "Playfair Display", serif;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+      align-items: center;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 200px;
+      max-width: 400px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(15, 18, 26, 0.85);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: rgba(212, 175, 90, 0.5);
+    }
+
+    .filter-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .filter-btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover {
+      border-color: rgba(212, 175, 90, 0.4);
+      color: var(--text);
+    }
+
+    .filter-btn.active {
+      background: rgba(212, 175, 90, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .export-btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      background: linear-gradient(135deg, var(--accent), #c9a44e);
+      color: #0a0c12;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-left: auto;
+    }
+
+    .export-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(212, 175, 90, 0.3);
+    }
+
+    .export-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Phrase Table */
+    .table-container {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .phrase-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .phrase-table th {
+      text-align: left;
+      padding: 14px 16px;
+      background: rgba(212, 175, 90, 0.08);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .phrase-table th:hover {
+      color: var(--text);
+    }
+
+    .phrase-table th.sorted {
+      color: var(--accent);
+    }
+
+    .phrase-table th .sort-icon {
+      margin-left: 6px;
+      opacity: 0.5;
+    }
+
+    .phrase-table th.sorted .sort-icon {
+      opacity: 1;
+    }
+
+    .phrase-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(212, 175, 90, 0.08);
+      font-size: 14px;
+    }
+
+    .phrase-table tr:hover {
+      background: rgba(212, 175, 90, 0.04);
+    }
+
+    .phrase-text {
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .phrase-score {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .score-bar {
+      width: 60px;
+      height: 6px;
+      background: rgba(212, 175, 90, 0.15);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .score-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .score-fill.high {
+      background: var(--success);
+    }
+
+    .score-fill.medium {
+      background: var(--accent);
+    }
+
+    .score-fill.low {
+      background: var(--accent-2);
+    }
+
+    .source-tag {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .source-tag.tfidf {
+      background: rgba(82, 199, 122, 0.15);
+      color: var(--success);
+    }
+
+    .source-tag.spacy {
+      background: rgba(168, 179, 216, 0.15);
+      color: var(--accent-2);
+    }
+
+    .source-tag.both {
+      background: rgba(212, 175, 90, 0.15);
+      color: var(--accent);
+    }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .page-info {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .page-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .page-btn {
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .page-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .page-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Loading & Empty States */
+    .loading-state,
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    /* Back link */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      margin-bottom: 16px;
+      transition: color 0.2s ease;
+    }
+
+    .back-link:hover {
+      color: var(--accent);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .controls {
+        flex-direction: column;
+      }
+
+      .search-box {
+        max-width: none;
+        width: 100%;
+      }
+
+      .filter-group {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 8px;
+      }
+
+      .export-btn {
+        margin-left: 0;
+        width: 100%;
+      }
+
+      .phrase-table {
+        font-size: 13px;
+      }
+
+      .phrase-table th,
+      .phrase-table td {
+        padding: 10px 12px;
+      }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="nav">
+      <a href="/" class="logo">
+        <span class="logo-mark"></span>
+        <span>Fluxer Atelier</span>
+      </a>
+      <div class="nav-links">
+        <a href="/" class="nav-link">Extraction</a>
+        <a href="/seo" class="nav-link active">SEO Analysis</a>
+        <a href="/generate" class="nav-link">Generator</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <a href="/" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back to Extraction
+    </a>
+
+    <h1 class="page-title">SEO Keyword Analysis</h1>
+    <p class="page-subtitle" id="page-subtitle">Analyze extracted product descriptions to discover high-impact SEO keywords and phrases.</p>
+
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-products">-</div>
+        <div class="stat-label">Products Analyzed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-phrases">-</div>
+        <div class="stat-label">Unique Phrases</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-tfidf">-</div>
+        <div class="stat-label">From TF-IDF</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-spacy">-</div>
+        <div class="stat-label">From NLP</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-both">-</div>
+        <div class="stat-label">Confirmed (Both)</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <div class="search-box">
+        <input type="text" class="search-input" id="search-input" placeholder="Search phrases...">
+      </div>
+      <div class="filter-group">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="high">High Impact</button>
+        <button class="filter-btn" data-filter="medium">Medium</button>
+        <button class="filter-btn" data-filter="both">Confirmed</button>
+      </div>
+      <button class="export-btn" id="export-btn" disabled>
+        Export CSV
+      </button>
+      <button class="export-btn" id="generate-btn" disabled style="background: linear-gradient(135deg, var(--accent), #c9a44e); color: #0a0c12; border: none;">
+        Generate Descriptions
+      </button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+      <div class="loading-state" id="loading-state">
+        <div class="loading-spinner"></div>
+        <p>Waiting for extraction data...</p>
+        <p style="font-size: 13px;">Complete a product extraction first, then return here to analyze SEO keywords.</p>
+      </div>
+
+      <div class="empty-state hidden" id="empty-state">
+        <div class="empty-state-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="M21 21l-4.35-4.35"/>
+          </svg>
+        </div>
+        <p>No phrases found matching your criteria.</p>
+      </div>
+
+      <table class="phrase-table hidden" id="phrase-table">
+        <thead>
+          <tr>
+            <th data-sort="phrase">Phrase <span class="sort-icon">↕</span></th>
+            <th data-sort="doc_freq" class="sorted">Doc Freq <span class="sort-icon">↓</span></th>
+            <th data-sort="total_occurrences">Occurrences <span class="sort-icon">↕</span></th>
+            <th data-sort="tfidf_score">TF-IDF <span class="sort-icon">↕</span></th>
+            <th data-sort="importance_score">Score <span class="sort-icon">↕</span></th>
+            <th data-sort="source">Source <span class="sort-icon">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="phrase-tbody">
+        </tbody>
+      </table>
+
+      <div class="pagination hidden" id="pagination">
+        <span class="page-info" id="page-info">Showing 1-50 of 500</span>
+        <div class="page-buttons">
+          <button class="page-btn" id="prev-btn" disabled>Previous</button>
+          <button class="page-btn" id="next-btn">Next</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // State
+    let allPhrases = [];
+    let filteredPhrases = [];
+    let currentPage = 1;
+    const pageSize = 50;
+    let sortColumn = 'doc_freq';
+    let sortDirection = 'desc';
+    let currentFilter = 'all';
+    let searchQuery = '';
+
+    // DOM elements
+    const loadingState = document.getElementById('loading-state');
+    const emptyState = document.getElementById('empty-state');
+    const phraseTable = document.getElementById('phrase-table');
+    const phraseTbody = document.getElementById('phrase-tbody');
+    const pagination = document.getElementById('pagination');
+    const pageInfo = document.getElementById('page-info');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const searchInput = document.getElementById('search-input');
+
+    // Check for extraction data on load
+    document.addEventListener('DOMContentLoaded', () => {
+      const storedResults = sessionStorage.getItem('extractionResults');
+
+      if (storedResults) {
+        try {
+          const results = JSON.parse(storedResults);
+          if (results && results.length > 0) {
+            runAnalysis(results);
+          }
+        } catch (e) {
+          console.error('Error parsing stored results:', e);
+        }
+      }
+    });
+
+    // Run SEO analysis
+    async function runAnalysis(extractionResults) {
+      loadingState.innerHTML = `
+        <div class="loading-spinner"></div>
+        <p>Analyzing ${extractionResults.length} products...</p>
+        <p style="font-size: 13px;">Extracting keywords and phrases using TF-IDF and NLP techniques.</p>
+      `;
+
+      try {
+        const response = await fetch('/api/seo/analyze-extraction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            results: extractionResults,
+            config: {
+              top_n: 500,
+              min_df: 1  // Lower threshold for smaller datasets
+            }
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'error') {
+          throw new Error(data.message);
+        }
+
+        // Update state
+        allPhrases = data.analysis.phrases;
+
+        // Update stats
+        updateStats(data.analysis.statistics);
+
+        // Render table
+        filterAndRender();
+
+        // Enable export and generate buttons
+        exportBtn.disabled = false;
+        generateBtn.disabled = false;
+
+        // Update subtitle
+        document.getElementById('page-subtitle').textContent =
+          `Discovered ${allPhrases.length} SEO keywords from ${data.analysis.statistics.total_documents} product descriptions.`;
+
+      } catch (error) {
+        console.error('Analysis error:', error);
+        loadingState.innerHTML = `
+          <div class="empty-state-icon" style="color: var(--error);">!</div>
+          <p style="color: var(--error);">Analysis failed: ${error.message}</p>
+          <p style="font-size: 13px;">Please try extracting products again.</p>
+        `;
+      }
+    }
+
+    // Update statistics display
+    function updateStats(stats) {
+      document.getElementById('stat-products').textContent = stats.total_products;
+      document.getElementById('stat-phrases').textContent = stats.unique_phrases;
+      document.getElementById('stat-tfidf').textContent = stats.phrases_from_tfidf;
+      document.getElementById('stat-spacy').textContent = stats.phrases_from_spacy;
+      document.getElementById('stat-both').textContent = stats.phrases_from_both;
+    }
+
+    // Filter and render phrases
+    function filterAndRender() {
+      // Apply search filter
+      let phrases = allPhrases;
+
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        phrases = phrases.filter(p => p.phrase.toLowerCase().includes(query));
+      }
+
+      // Apply category filter
+      if (currentFilter === 'high') {
+        phrases = phrases.filter(p => p.importance_score >= 70);
+      } else if (currentFilter === 'medium') {
+        phrases = phrases.filter(p => p.importance_score >= 40 && p.importance_score < 70);
+      } else if (currentFilter === 'both') {
+        phrases = phrases.filter(p => p.source === 'both');
+      }
+
+      // Sort
+      phrases = [...phrases].sort((a, b) => {
+        let aVal = a[sortColumn];
+        let bVal = b[sortColumn];
+
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+
+        if (sortDirection === 'asc') {
+          return aVal > bVal ? 1 : -1;
+        } else {
+          return aVal < bVal ? 1 : -1;
+        }
+      });
+
+      filteredPhrases = phrases;
+
+      // Reset to page 1 on filter change
+      currentPage = 1;
+
+      renderTable();
+    }
+
+    // Render table
+    function renderTable() {
+      if (filteredPhrases.length === 0) {
+        loadingState.classList.add('hidden');
+        phraseTable.classList.add('hidden');
+        pagination.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      loadingState.classList.add('hidden');
+      emptyState.classList.add('hidden');
+      phraseTable.classList.remove('hidden');
+      pagination.classList.remove('hidden');
+
+      // Calculate pagination
+      const startIdx = (currentPage - 1) * pageSize;
+      const endIdx = Math.min(startIdx + pageSize, filteredPhrases.length);
+      const pageData = filteredPhrases.slice(startIdx, endIdx);
+
+      // Update page info
+      pageInfo.textContent = `Showing ${startIdx + 1}-${endIdx} of ${filteredPhrases.length}`;
+
+      // Update buttons
+      prevBtn.disabled = currentPage === 1;
+      nextBtn.disabled = endIdx >= filteredPhrases.length;
+
+      // Render rows
+      phraseTbody.innerHTML = pageData.map(phrase => {
+        const scoreClass = phrase.importance_score >= 70 ? 'high' :
+                          phrase.importance_score >= 40 ? 'medium' : 'low';
+
+        return `
+          <tr>
+            <td class="phrase-text">${escapeHtml(phrase.phrase)}</td>
+            <td>${phrase.doc_freq}</td>
+            <td>${phrase.total_occurrences}</td>
+            <td>${phrase.tfidf_score.toFixed(2)}</td>
+            <td>
+              <div class="phrase-score">
+                <div class="score-bar">
+                  <div class="score-fill ${scoreClass}" style="width: ${phrase.importance_score}%"></div>
+                </div>
+                <span>${phrase.importance_score.toFixed(0)}</span>
+              </div>
+            </td>
+            <td>
+              <span class="source-tag ${phrase.source}">${phrase.source}</span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Event listeners
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      filterAndRender();
+    });
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        filterAndRender();
+      });
+    });
+
+    document.querySelectorAll('.phrase-table th[data-sort]').forEach(th => {
+      th.addEventListener('click', () => {
+        const column = th.dataset.sort;
+
+        if (sortColumn === column) {
+          sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortColumn = column;
+          sortDirection = 'desc';
+        }
+
+        // Update UI
+        document.querySelectorAll('.phrase-table th').forEach(h => {
+          h.classList.remove('sorted');
+          h.querySelector('.sort-icon').textContent = '↕';
+        });
+        th.classList.add('sorted');
+        th.querySelector('.sort-icon').textContent = sortDirection === 'asc' ? '↑' : '↓';
+
+        filterAndRender();
+      });
+    });
+
+    prevBtn.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        renderTable();
+      }
+    });
+
+    nextBtn.addEventListener('click', () => {
+      const maxPage = Math.ceil(filteredPhrases.length / pageSize);
+      if (currentPage < maxPage) {
+        currentPage++;
+        renderTable();
+      }
+    });
+
+    // Generate descriptions - store keywords and navigate
+    const generateBtn = document.getElementById('generate-btn');
+    generateBtn.addEventListener('click', () => {
+      // Store keywords in session storage
+      sessionStorage.setItem('seoKeywords', JSON.stringify(allPhrases));
+      // Navigate to generator page
+      window.location.href = '/generate';
+    });
+
+    // Export CSV
+    exportBtn.addEventListener('click', async () => {
+      try {
+        exportBtn.disabled = true;
+        exportBtn.textContent = 'Exporting...';
+
+        const response = await fetch('/api/seo/export-csv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phrases: allPhrases })
+        });
+
+        if (!response.ok) {
+          throw new Error('Export failed');
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'seo_phrases.csv';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+      } catch (error) {
+        console.error('Export error:', error);
+        alert('Export failed: ' + error.message);
+      } finally {
+        exportBtn.disabled = false;
+        exportBtn.textContent = 'Export CSV';
+      }
+    });
+  </script>
+</body>
+</html>
