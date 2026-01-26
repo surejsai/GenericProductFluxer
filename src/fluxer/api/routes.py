@@ -24,7 +24,7 @@ def get_extractor() -> Union[HTMLProductExtractor, FirecrawlProductExtractor]:
     if Config.EXTRACTOR_TYPE == "firecrawl":
         logger.debug("Using Firecrawl extractor")
         return FirecrawlProductExtractor(
-            timeout_s=120,
+            timeout_s=45,  # Reduced timeout for faster failure
         )
     else:
         logger.debug("Using HTML extractor")
