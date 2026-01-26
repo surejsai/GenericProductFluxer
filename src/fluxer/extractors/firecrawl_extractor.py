@@ -174,7 +174,7 @@ additional_information = remaining description paragraphs."""
         }
 
         logger.info("FIRECRAWL Requesting extraction for: %s", url)
-        logger.debug("FIRECRAWL Payload: %s", json.dumps(payload, indent=2))
+        # Don't log full payload to save memory
 
         response = requests.post(
             self.API_URL,
@@ -195,7 +195,7 @@ additional_information = remaining description paragraphs."""
             )
 
         response_data = response.json()
-        logger.debug("FIRECRAWL Raw response: %s", json.dumps(response_data, indent=2)[:2000])
+        # Don't log raw response to save memory
 
         # Firecrawl v1 returns data directly or wrapped in "data" key
         if response_data.get("success") and "data" in response_data:
@@ -219,8 +219,7 @@ additional_information = remaining description paragraphs."""
         )
         metadata = data.get("metadata", {})
 
-        logger.info("FIRECRAWL Parsing response - extract data: %s", json_data)
-        logger.debug("FIRECRAWL Metadata: %s", metadata)
+        # Don't log full json_data/metadata to save memory
 
         # Extract main fields
         product_name = json_data.get("product_name")
@@ -296,8 +295,8 @@ additional_information = remaining description paragraphs."""
             meta_description=meta_description,
             extraction_method="firecrawl",
             confidence_score=confidence,
-            credits_used=credits_used,
-            raw_response=data
+            credits_used=credits_used
+            # Don't store raw_response to save memory
         )
 
     def _is_error_page(self, description: str) -> bool:

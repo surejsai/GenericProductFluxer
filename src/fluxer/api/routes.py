@@ -329,15 +329,25 @@ def extract_batch() -> tuple[Dict[str, Any], int]:
                     'success': False
                 }
 
-        # Step 1: Extract primary products in parallel
+        # Step 1: Extract primary products
         primary_results = []
-        with ThreadPoolExecutor(max_workers=Config.EXTRACTION_WORKERS) as executor:
-            futures = {
-                executor.submit(extract_single, product, i, False): i
-                for i, product in enumerate(primary_products)
-            }
-            for future in as_completed(futures):
-                primary_results.append(future.result())
+        if Config.EXTRACTION_WORKERS <= 1:
+            # Sequential extraction - saves memory on constrained environments
+            for i, product in enumerate(primary_products):
+                result = extract_single(product, i, False)
+                primary_results.append(result)
+                # Force garbage collection after each extraction
+                import gc
+                gc.collect()
+        else:
+            # Parallel extraction
+            with ThreadPoolExecutor(max_workers=Config.EXTRACTION_WORKERS) as executor:
+                futures = {
+                    executor.submit(extract_single, product, i, False): i
+                    for i, product in enumerate(primary_products)
+                }
+                for future in as_completed(futures):
+                    primary_results.append(future.result())
 
         # Sort by original index to maintain order
         primary_results.sort(key=lambda x: x['index'])
@@ -361,15 +371,24 @@ def extract_batch() -> tuple[Dict[str, Any], int]:
 
             logger.info(f"Trying {len(backups_to_try)} backup products...")
 
-            # Extract backups in parallel
+            # Extract backups
             backup_results = []
-            with ThreadPoolExecutor(max_workers=Config.EXTRACTION_WORKERS) as executor:
-                futures = {
-                    executor.submit(extract_single, product, target_count + backup_index + i, True): i
-                    for i, product in enumerate(backups_to_try)
-                }
-                for future in as_completed(futures):
-                    backup_results.append(future.result())
+            if Config.EXTRACTION_WORKERS <= 1:
+                # Sequential extraction
+                for i, product in enumerate(backups_to_try):
+                    result = extract_single(product, target_count + backup_index + i, True)
+                    backup_results.append(result)
+                    import gc
+                    gc.collect()
+            else:
+                # Parallel extraction
+                with ThreadPoolExecutor(max_workers=Config.EXTRACTION_WORKERS) as executor:
+                    futures = {
+                        executor.submit(extract_single, product, target_count + backup_index + i, True): i
+                        for i, product in enumerate(backups_to_try)
+                    }
+                    for future in as_completed(futures):
+                        backup_results.append(future.result())
 
             # Process backup results
             for result in backup_results:
