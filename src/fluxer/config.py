@@ -16,8 +16,8 @@ except ImportError:
 class Config:
     """Application configuration."""
 
-    # Project paths
-    PROJECT_ROOT = Path(__file__).parent.parent.parent
+    # Project paths - use CWD for deployed environments, fallback to relative path
+    PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", Path.cwd()))
     SRC_DIR = PROJECT_ROOT / "src"
     TEMPLATES_DIR = PROJECT_ROOT / "templates"
     STATIC_DIR = PROJECT_ROOT / "static"
@@ -36,7 +36,7 @@ class Config:
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
     FLASK_DEBUG: bool = os.getenv("FLASK_DEBUG", "True").lower() == "true"
     FLASK_HOST: str = os.getenv("FLASK_HOST", "0.0.0.0")
-    FLASK_PORT: int = int(os.getenv("FLASK_PORT", "5000"))
+    FLASK_PORT: int = int(os.getenv("PORT", os.getenv("FLASK_PORT", "5000")))
     SECRET_KEY: str = os.getenv("SECRET_KEY", secrets.token_hex(32))
 
     # CORS settings (comma-separated list of allowed origins, or "*" for all)
