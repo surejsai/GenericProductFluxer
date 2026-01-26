@@ -331,7 +331,7 @@ def extract_batch() -> tuple[Dict[str, Any], int]:
 
         # Step 1: Extract primary products in parallel
         primary_results = []
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=Config.EXTRACTION_WORKERS) as executor:
             futures = {
                 executor.submit(extract_single, product, i, False): i
                 for i, product in enumerate(primary_products)
@@ -363,7 +363,7 @@ def extract_batch() -> tuple[Dict[str, Any], int]:
 
             # Extract backups in parallel
             backup_results = []
-            with ThreadPoolExecutor(max_workers=5) as executor:
+            with ThreadPoolExecutor(max_workers=Config.EXTRACTION_WORKERS) as executor:
                 futures = {
                     executor.submit(extract_single, product, target_count + backup_index + i, True): i
                     for i, product in enumerate(backups_to_try)

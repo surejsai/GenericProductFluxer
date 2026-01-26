@@ -31,6 +31,8 @@ class Config:
     # Extractor configuration
     # Options: "html" (ScraperAPI + custom parsing) or "firecrawl" (Firecrawl LLM extraction)
     EXTRACTOR_TYPE: str = os.getenv("EXTRACTOR_TYPE", "firecrawl")
+    # Number of parallel workers for batch extraction (reduce for memory-constrained environments)
+    EXTRACTION_WORKERS: int = int(os.getenv("EXTRACTION_WORKERS", "2"))
 
     # Flask settings
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
@@ -109,6 +111,7 @@ class Config:
             "flask_host": cls.FLASK_HOST,
             "flask_port": cls.FLASK_PORT,
             "extractor_type": cls.EXTRACTOR_TYPE,
+            "extraction_workers": cls.EXTRACTION_WORKERS,
             "serp_api_configured": cls.SERP_API_KEY is not None,
             "scraper_api_configured": cls.SCRAPER_API_KEY is not None,
             "firecrawl_api_configured": cls.FIRECRAWL_API_KEY is not None,

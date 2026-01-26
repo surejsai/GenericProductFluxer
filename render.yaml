@@ -5,7 +5,7 @@ services:
     region: oregon  # or singapore, frankfurt, ohio
     plan: free  # or starter, standard, pro
     buildCommand: pip install poetry && poetry config virtualenvs.create false && poetry install --without dev --no-interaction
-    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2
+    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
     envVars:
       - key: FLASK_ENV
         value: production
@@ -21,6 +21,8 @@ services:
         sync: false
       - key: EXTRACTOR_TYPE
         value: firecrawl
+      - key: EXTRACTION_WORKERS
+        value: "2"  # Reduce for memory-constrained environments
       - key: LOG_LEVEL
         value: INFO
     healthCheckPath: /health
