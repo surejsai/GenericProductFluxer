@@ -22,7 +22,7 @@ services:
       - key: EXTRACTOR_TYPE
         value: firecrawl
       - key: EXTRACTION_WORKERS
-        value: "2"  # Reduce for memory-constrained environments
+        value: "1"  # Sequential processing for free tier memory limits
       - key: LOG_LEVEL
         value: INFO
     healthCheckPath: /health
