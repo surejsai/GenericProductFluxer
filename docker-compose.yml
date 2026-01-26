@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  fluxer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${FLASK_PORT:-5000}:5000"
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=false
+      - FLASK_HOST=0.0.0.0
+      - FLASK_PORT=5000
+      - LOG_LEVEL=INFO
+      # API Keys - set these in your .env file or environment
+      - SERP_API_KEY=${SERP_API_KEY}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+      - SCRAPER_API_KEY=${SCRAPER_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EXTRACTOR_TYPE=${EXTRACTOR_TYPE:-firecrawl}
+      # Security
+      - SECRET_KEY=${SECRET_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Optional: Add a reverse proxy for production
+#  nginx:
+#    image: nginx:alpine
+#    ports:
+#      - "80:80"
+#      - "443:443"
+#    volumes:
+#      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+#    depends_on:
+#      - fluxer

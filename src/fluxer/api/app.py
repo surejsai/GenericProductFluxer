@@ -25,8 +25,16 @@ def create_app() -> Flask:
         static_folder=str(Config.STATIC_DIR) if Config.STATIC_DIR.exists() else None
     )
 
-    # Enable CORS
-    CORS(app)
+    # Configure app
+    app.config['SECRET_KEY'] = Config.SECRET_KEY
+    app.config['ENV'] = Config.FLASK_ENV
+
+    # Enable CORS with configured origins
+    cors_origins = Config.get_cors_origins()
+    if cors_origins == ["*"]:
+        CORS(app)
+    else:
+        CORS(app, origins=cors_origins)
 
     # Register blueprints
     app.register_blueprint(api_bp)

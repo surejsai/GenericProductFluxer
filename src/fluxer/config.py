@@ -2,7 +2,8 @@
 Configuration management for Fluxer.
 """
 import os
-from typing import Optional
+import secrets
+from typing import Optional, List
 from pathlib import Path
 
 try:
@@ -25,6 +26,7 @@ class Config:
     SERP_API_KEY: Optional[str] = os.getenv("SERP_API_KEY")
     SCRAPER_API_KEY: Optional[str] = os.getenv("SCRAPER_API_KEY")
     FIRECRAWL_API_KEY: Optional[str] = os.getenv("FIRECRAWL_API_KEY")
+    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
 
     # Extractor configuration
     # Options: "html" (ScraperAPI + custom parsing) or "firecrawl" (Firecrawl LLM extraction)
@@ -35,6 +37,22 @@ class Config:
     FLASK_DEBUG: bool = os.getenv("FLASK_DEBUG", "True").lower() == "true"
     FLASK_HOST: str = os.getenv("FLASK_HOST", "0.0.0.0")
     FLASK_PORT: int = int(os.getenv("FLASK_PORT", "5000"))
+    SECRET_KEY: str = os.getenv("SECRET_KEY", secrets.token_hex(32))
+
+    # CORS settings (comma-separated list of allowed origins, or "*" for all)
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
+
+    @classmethod
+    def get_cors_origins(cls) -> List[str]:
+        """Get list of allowed CORS origins."""
+        if cls.CORS_ORIGINS == "*":
+            return ["*"]
+        return [origin.strip() for origin in cls.CORS_ORIGINS.split(",") if origin.strip()]
+
+    @classmethod
+    def is_production(cls) -> bool:
+        """Check if running in production mode."""
+        return cls.FLASK_ENV == "production" or not cls.FLASK_DEBUG
 
     # Extraction defaults
     DEFAULT_TIMEOUT_S: int = 120
@@ -88,9 +106,14 @@ class Config:
         return {
             "flask_env": cls.FLASK_ENV,
             "flask_debug": cls.FLASK_DEBUG,
+            "flask_host": cls.FLASK_HOST,
+            "flask_port": cls.FLASK_PORT,
             "extractor_type": cls.EXTRACTOR_TYPE,
             "serp_api_configured": cls.SERP_API_KEY is not None,
             "scraper_api_configured": cls.SCRAPER_API_KEY is not None,
             "firecrawl_api_configured": cls.FIRECRAWL_API_KEY is not None,
+            "openai_api_configured": cls.OPENAI_API_KEY is not None,
+            "cors_origins": cls.CORS_ORIGINS,
             "log_level": cls.LOG_LEVEL,
+            "is_production": cls.is_production(),
         }

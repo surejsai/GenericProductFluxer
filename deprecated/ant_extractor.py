@@ -4,6 +4,7 @@ Universal Product Description Extractor
 Extract product information from any product page URL using AI
 """
 
+import os
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -36,8 +37,11 @@ def clean_html(html_content):
 def extract_with_anthropic(html_content, url):
     """Use Anthropic API to extract product information"""
     
-    # You need to set your API key here or as environment variable
-    api_key = "YOUR_ANTHROPIC_API_KEY_HERE"  # Replace with your actual API key
+    # API key from environment variable
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        print("Error: ANTHROPIC_API_KEY environment variable not set")
+        return None
     
     # Truncate HTML if too long (keep first 40000 chars to stay within limits)
     truncated_html = html_content[:40000]
