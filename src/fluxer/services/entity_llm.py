@@ -237,11 +237,28 @@ Missing types requested (only fill these if evidence exists):
 Known ambiguities/conflicts from rules (do NOT override; only comment in notes.conflicts):
 {rule_conflicts_json}
 
-OUTPUT JSON SCHEMA
-You MUST output JSON that matches this schema:
-{schema_json}
+YOUR OUTPUT FORMAT
+Output a single JSON object with these exact keys:
+- "primary_entity_path": string (e.g., "Appliance > Microwave > Compact")
+- "llm_entities": array of entity objects, each with: name, type, value, unit, evidence, why_it_matters, source
+- "placement_map": object with keys: spec_table, designed_for, not_suitable_for, care_maintenance, faqs, json_ld (each an array of strings)
+- "faqs": array of objects with: question, answer, evidence
+- "confidence": object with: primary_entity (0-1), supporting_entities (0-1)
+- "notes": object with: missing_types (array), conflicts (array), assumptions (array)
 
-NOW PRODUCE THE JSON OUTPUT."""
+EXAMPLE OUTPUT STRUCTURE (fill in with actual data from inputs):
+{{
+  "primary_entity_path": "Category > Subcategory > Type",
+  "llm_entities": [
+    {{"name": "Example", "type": "material", "value": null, "unit": null, "evidence": "quote from input", "why_it_matters": "explanation", "source": "llm"}}
+  ],
+  "placement_map": {{"spec_table": [], "designed_for": [], "not_suitable_for": [], "care_maintenance": [], "faqs": [], "json_ld": []}},
+  "faqs": [],
+  "confidence": {{"primary_entity": 0.8, "supporting_entities": 0.7}},
+  "notes": {{"missing_types": [], "conflicts": [], "assumptions": []}}
+}}
+
+NOW OUTPUT THE JSON (not a schema, not an example - actual data based on the inputs above):"""
 
 
 FIX_JSON_PROMPT = """Your previous output did not match the required JSON Schema.
@@ -506,9 +523,6 @@ class EntityLLMExtractor:
         # Format conflicts
         rule_conflicts_json = json.dumps(rule_conflicts) if rule_conflicts else "[]"
 
-        # Get schema as JSON string
-        schema_json = json.dumps(LLM_OUTPUT_SCHEMA, indent=2)
-
         return USER_PROMPT_TEMPLATE.format(
             search_query=(search_query or "(Not provided)"),
             product_name=product_name,
@@ -518,8 +532,7 @@ class EntityLLMExtractor:
             grouped_terms_json=grouped_terms_json,
             rule_entities_json=rule_entities_json,
             missing_types_json=missing_types_json,
-            rule_conflicts_json=rule_conflicts_json,
-            schema_json=schema_json
+            rule_conflicts_json=rule_conflicts_json
         )
 
     def _call_with_retry(self, user_prompt: str) -> Optional[Dict]:
@@ -557,13 +570,24 @@ class EntityLLMExtractor:
                 if not isinstance(data, dict):
                     raise ValueError("Response is not a JSON object")
 
-                # Check required top-level keys
-                required_keys = ["primary_entity_path", "llm_entities", "placement_map", "faqs", "confidence", "notes"]
-                missing_keys = [k for k in required_keys if k not in data]
-                if missing_keys:
-                    raise ValueError(f"Missing required keys: {missing_keys}")
+                # Check for at least some useful keys (be lenient - extract what we can)
+                useful_keys = ["primary_entity_path", "llm_entities"]
+                has_useful = any(k in data for k in useful_keys)
 
-                logger.info("LLM API call successful")
+                if not has_useful:
+                    # If truly nothing useful, log what we got and retry
+                    logger.warning(f"Response missing useful keys. Got: {list(data.keys())}")
+                    raise ValueError(f"Response missing useful keys: {useful_keys}")
+
+                # Fill in defaults for missing optional keys
+                data.setdefault("primary_entity_path", "Unknown")
+                data.setdefault("llm_entities", [])
+                data.setdefault("placement_map", {})
+                data.setdefault("faqs", [])
+                data.setdefault("confidence", {"primary_entity": 0.5, "supporting_entities": 0.5})
+                data.setdefault("notes", {"missing_types": [], "conflicts": [], "assumptions": []})
+
+                logger.info(f"LLM API call successful - extracted {len(data.get('llm_entities', []))} entities")
                 return data
 
             except json.JSONDecodeError as e:

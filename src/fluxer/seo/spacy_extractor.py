@@ -81,8 +81,8 @@ class SpacyExtractor:
     # Minimum document frequency
     min_df: int = 2
 
-    # Top N phrases to return
-    top_n: int = 300
+    # Top N phrases to return (aligned with SEO analyzer default)
+    top_n: int = 200
 
     # Stopwords to strip from phrase edges
     edge_stopwords: Set[str] = field(default_factory=lambda: {

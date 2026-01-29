@@ -101,13 +101,14 @@ def search_products() -> tuple[Dict[str, Any], int]:
             api_key=None  # Uses env SERP_API_KEY
         )
 
-        # Enrich with organic links
+        # Enrich with organic links (parallel)
         aggregated = SerpProcessor.enrich_with_first_organic_links(
             aggregated,
             device='desktop',
             api_key=None,
             engine='google',
-            max_per_query=10
+            max_per_query=10,
+            max_workers=Config.EXTRACTION_WORKERS  # Use EXTRACTION_WORKERS for parallel enrichment
         )
 
         # Convert to response format
@@ -471,7 +472,7 @@ def analyze_seo() -> tuple[Dict[str, Any], int]:
             ...
         ],
         "config": {  // Optional
-            "top_n": 500,
+            "top_n": 200,
             "min_df": 2,
             "brands": ["brand1", "brand2"]
         }
@@ -501,7 +502,7 @@ def analyze_seo() -> tuple[Dict[str, Any], int]:
 
         # Initialize analyzer with config
         analyzer = SEOAnalyzer(
-            top_n_phrases=config.get('top_n', 500),
+            top_n_phrases=config.get('top_n', 200),
             min_doc_freq=config.get('min_df', 2),
             brand_names=set(config.get('brands', []))
         )
@@ -535,7 +536,7 @@ def analyze_seo_from_extraction() -> tuple[Dict[str, Any], int]:
     {
         "results": [...],  // Results from extract-batch
         "config": {  // Optional
-            "top_n": 500,
+            "top_n": 200,
             "min_df": 2
         }
     }
@@ -561,7 +562,7 @@ def analyze_seo_from_extraction() -> tuple[Dict[str, Any], int]:
 
         # Initialize analyzer
         analyzer = SEOAnalyzer(
-            top_n_phrases=config.get('top_n', 500),
+            top_n_phrases=config.get('top_n', 200),
             min_doc_freq=config.get('min_df', 2),
             brand_names=set(config.get('brands', []))
         )

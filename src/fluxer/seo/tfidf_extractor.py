@@ -68,8 +68,8 @@ class TFIDFExtractor:
     # Maximum number of features to extract
     max_features: int = 5000
 
-    # Top N phrases to return
-    top_n: int = 500
+    # Top N phrases to return (200 is practical for SEO)
+    top_n: int = 200
 
     # Additional stopwords beyond English defaults
     extra_stopwords: List[str] = field(default_factory=lambda: [

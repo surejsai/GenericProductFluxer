@@ -368,12 +368,37 @@ class EntityExtractor:
         rules_path: Optional[str],
         llm_path: Optional[str]
     ) -> str:
-        """Determine final primary entity path, preferring rules."""
-        if rules_path and not rules_path.startswith("Product >"):
+        """
+        Determine final primary entity path.
+
+        Strategy:
+        - If rules returns a confident category (not "Product >"), use it
+        - If rules returns "Product > Unknown" (low confidence), prefer LLM
+        - If rules returns "Product > <something>" but LLM has a better path, prefer LLM
+        - Fall back to rules path if nothing else works
+        """
+        # Check if rules path indicates low confidence
+        rules_uncertain = (
+            not rules_path or
+            rules_path.startswith("Product >")
+        )
+
+        # Check if LLM provided a confident category
+        llm_has_category = (
+            llm_path and
+            not llm_path.startswith("Product >") and
+            "Unknown" not in llm_path
+        )
+
+        if not rules_uncertain:
+            # Rules has a confident category match
             path = rules_path
-        elif llm_path:
+        elif llm_has_category:
+            # Rules uncertain, but LLM has a confident category
             path = llm_path
+            logger.info(f"Using LLM category path: {llm_path} (rules was uncertain)")
         else:
+            # Both are uncertain, use rules path or default
             path = rules_path or "Product > Unknown"
 
         # Clean brand names from the path

@@ -125,8 +125,8 @@ class SEOAnalyzer:
     Orchestrates text cleaning, keyword extraction, and result generation.
     """
 
-    # Configuration
-    top_n_phrases: int = 500
+    # Configuration (200 is practical for SEO; higher values increase noise)
+    top_n_phrases: int = 200
     min_doc_freq: int = 2
     ngram_range: tuple = (1, 3)
 

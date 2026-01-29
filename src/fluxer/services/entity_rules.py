@@ -113,7 +113,8 @@ class EntityRulesEngine:
 
     # Primary entity keywords for path inference
     PRIMARY_ENTITY_KEYWORDS = {
-        'Apparel': ['apparel', 'clothing', 'clothes', 'wear', 'shirt', 'short', 'shorts', 'pants', 'dress', 'jacket', 'coat', 'sweater', 'hoodie', 'top', 'bottom', 'skirt', 'legging', 'leggings', 'bike short', 'bike shorts', 'activewear', 'sportswear', 'athleisure', 'underwear', 'bra', 'sock', 'socks'],
+        'Food': ['food', 'snack', 'snacks', 'candy', 'candies', 'chocolate', 'biscuit', 'biscuits', 'cookie', 'cookies', 'confectionery', 'confection', 'treat', 'treats', 'sweet', 'sweets', 'lolly', 'lollies', 'pocky', 'chips', 'crisps', 'crackers', 'cracker', 'wafer', 'wafers', 'gummy', 'gummies', 'caramel', 'toffee', 'fudge', 'mints', 'mint', 'licorice', 'liquorice', 'marshmallow', 'nougat', 'praline', 'truffle', 'bonbon', 'jellybean', 'lollipop', 'hard candy', 'chewy', 'crunchy', 'crispy', 'edible', 'flavour', 'flavor', 'strawberry', 'matcha', 'vanilla', 'cocoa', 'hazelnut'],
+        'Apparel': ['apparel', 'clothing', 'clothes', 'wear', 'shirt', 'short', 'shorts', 'pants', 'dress', 'jacket', 'coat', 'sweater', 'hoodie', 'tank top', 'blouse top', 'crop top', 'bottom', 'skirt', 'legging', 'leggings', 'bike short', 'bike shorts', 'activewear', 'sportswear', 'athleisure', 'underwear', 'bra', 'sock', 'socks'],
         'Footwear': ['footwear', 'shoe', 'shoes', 'boot', 'boots', 'sneaker', 'sneakers', 'sandal', 'sandals', 'slipper', 'slippers', 'heel', 'heels', 'loafer', 'loafers', 'trainer', 'trainers'],
         'Accessories': ['accessory', 'accessories', 'bag', 'bags', 'handbag', 'purse', 'wallet', 'belt', 'hat', 'cap', 'scarf', 'glove', 'gloves', 'watch', 'jewelry', 'jewellery', 'sunglasses'],
         'Furniture': ['furniture', 'table', 'chair', 'sofa', 'bed', 'cabinet', 'desk', 'shelving', 'bench', 'stool', 'ottoman'],
@@ -133,6 +134,7 @@ class EntityRulesEngine:
     # Materials that are NOT applicable for certain categories
     # Used to filter out irrelevant materials from TF-IDF noise
     EXCLUDED_MATERIALS_BY_CATEGORY = {
+        'Food': ['stainless steel', 'steel', 'iron', 'aluminium', 'aluminum', 'brass', 'copper', 'bronze', 'granite', 'marble', 'concrete', 'glass', 'ceramic', 'porcelain', 'timber', 'oak', 'pine', 'teak', 'ash', 'walnut', 'leather', 'polyester', 'nylon', 'cotton', 'wool', 'silk', 'linen', 'velvet', 'suede', 'denim', 'lycra', 'spandex', 'acrylic', 'vinyl', 'rubber'],
         'Apparel': ['stainless steel', 'steel', 'iron', 'aluminium', 'aluminum', 'brass', 'copper', 'bronze', 'granite', 'marble', 'concrete', 'glass', 'ceramic', 'porcelain', 'timber', 'oak', 'pine', 'teak', 'ash', 'walnut'],
         'Footwear': ['stainless steel', 'steel', 'iron', 'aluminium', 'aluminum', 'brass', 'copper', 'bronze', 'granite', 'marble', 'concrete', 'glass', 'ceramic', 'porcelain', 'timber', 'oak', 'pine', 'teak'],
         'Accessories': ['stainless steel', 'iron', 'aluminium', 'granite', 'marble', 'concrete', 'timber', 'oak', 'pine', 'teak'],
@@ -717,27 +719,64 @@ class EntityRulesEngine:
 
         return entities[:3]
 
+    # Keywords that are highly specific (more weight in scoring)
+    HIGH_SPECIFICITY_KEYWORDS = {
+        # Food/snack specific
+        'pocky', 'chocolate', 'candy', 'snack', 'biscuit', 'cookie', 'confectionery',
+        'gummy', 'wafer', 'chips', 'crackers', 'marshmallow', 'lolly', 'lollies',
+        # Apparel specific
+        'shirt', 'dress', 'jacket', 'pants', 'jeans', 'hoodie', 'sweater',
+        # Footwear specific
+        'shoe', 'boot', 'sneaker', 'sandal',
+        # Appliance specific
+        'cooktop', 'refrigerator', 'dishwasher', 'microwave', 'oven',
+        # Electronics specific
+        'laptop', 'phone', 'tablet', 'television', 'camera',
+    }
+
+    # Minimum score required for a confident category match
+    MIN_CATEGORY_SCORE = 2.0  # Requires either 1 high-specificity match or 2+ generic matches
+
     def _detect_product_category(self, text: str) -> Optional[str]:
         """
         Detect the product category from text (search query or product name).
-        Used for filtering irrelevant materials and entities.
+        Uses weighted scoring with minimum threshold to avoid false positives.
+
+        High-specificity keywords get 3x weight.
+        Requires minimum score to return a category.
         """
         if not text:
             return None
 
         text_lower = text.lower()
+        words = set(text_lower.split())  # For whole-word matching
 
-        # Score each category based on keyword matches
+        # Score each category with weighted scoring
         scores = {}
         for category, keywords in self.PRIMARY_ENTITY_KEYWORDS.items():
-            score = sum(1 for kw in keywords if kw.lower() in text_lower)
-            if score > 0:
+            score = 0.0
+            for kw in keywords:
+                kw_lower = kw.lower()
+                # Check for whole word match first (more reliable)
+                if kw_lower in words:
+                    weight = 3.0 if kw_lower in self.HIGH_SPECIFICITY_KEYWORDS else 1.0
+                    score += weight
+                # Fall back to substring match for multi-word keywords
+                elif ' ' in kw_lower and kw_lower in text_lower:
+                    weight = 3.0 if kw_lower in self.HIGH_SPECIFICITY_KEYWORDS else 1.0
+                    score += weight
+                # Single word substring match (less weight, more false positives)
+                elif ' ' not in kw_lower and kw_lower in text_lower and len(kw_lower) >= 4:
+                    weight = 0.5 if kw_lower in self.HIGH_SPECIFICITY_KEYWORDS else 0.3
+                    score += weight
+
+            if score >= self.MIN_CATEGORY_SCORE:
                 scores[category] = score
 
         if not scores:
             return None
 
-        # Return the highest scoring category
+        # Return the highest scoring category that meets threshold
         return max(scores, key=scores.get)
 
     def _identify_primary_entity(
@@ -747,7 +786,12 @@ class EntityRulesEngine:
         entities: List[EntityItem],
         search_query: Optional[str] = None
     ) -> str:
-        """Identify primary product entity path."""
+        """
+        Identify primary product entity path.
+
+        Returns "Product > Unknown" when confidence is low, signaling that
+        LLM should be preferred in entity_extractor.py.
+        """
         # IMPORTANT: Prioritize search query over TF-IDF contaminated text
         # The search query tells us what the user was actually looking for
         if search_query:
@@ -763,17 +807,36 @@ class EntityRulesEngine:
                 return f"{query_category} > {clean_query}"
 
         # Fallback to analyzing all text (may be contaminated with unrelated terms)
+        # Use the same weighted scoring as _detect_product_category
         search_text = all_text.lower()
+        words = set(search_text.split())
 
-        # Score each primary entity type
+        # Score each primary entity type with weighted scoring
         scores = {}
         for entity_type, keywords in self.PRIMARY_ENTITY_KEYWORDS.items():
-            score = sum(1 for kw in keywords if kw.lower() in search_text)
-            if score > 0:
+            score = 0.0
+            for kw in keywords:
+                kw_lower = kw.lower()
+                # Whole word match (more reliable)
+                if kw_lower in words:
+                    weight = 3.0 if kw_lower in self.HIGH_SPECIFICITY_KEYWORDS else 1.0
+                    score += weight
+                # Multi-word keyword substring match
+                elif ' ' in kw_lower and kw_lower in search_text:
+                    weight = 3.0 if kw_lower in self.HIGH_SPECIFICITY_KEYWORDS else 1.0
+                    score += weight
+                # Single word substring match (lower weight)
+                elif ' ' not in kw_lower and kw_lower in search_text and len(kw_lower) >= 4:
+                    weight = 0.5 if kw_lower in self.HIGH_SPECIFICITY_KEYWORDS else 0.3
+                    score += weight
+
+            if score >= self.MIN_CATEGORY_SCORE:
                 scores[entity_type] = score
 
+        # If no category meets threshold, return uncertain path
+        # This signals to entity_extractor.py to prefer LLM's categorization
         if not scores:
-            return f"Product > {product_name.title()}"
+            return f"Product > Unknown"
 
         # Get top scoring entity
         top_entity = max(scores, key=scores.get)
@@ -793,6 +856,23 @@ class EntityRulesEngine:
     ) -> Optional[str]:
         """Infer a more specific subtype for the primary entity."""
         subtype_hints = {
+            'Food': {
+                'chocolate': 'Chocolate',
+                'candy': 'Candy',
+                'snack': 'Snack',
+                'biscuit': 'Biscuit',
+                'cookie': 'Cookie',
+                'wafer': 'Wafer',
+                'chips': 'Chips',
+                'crackers': 'Crackers',
+                'gummy': 'Gummy',
+                'marshmallow': 'Marshmallow',
+                'lolly': 'Confectionery',
+                'confectionery': 'Confectionery',
+                'pocky': 'Snack Stick',
+                'sweet': 'Sweet',
+                'treat': 'Treat',
+            },
             'Apparel': {
                 'bike short': 'Bike Short',
                 'bike shorts': 'Bike Shorts',
@@ -812,7 +892,8 @@ class EntityRulesEngine:
                 'pants': 'Pants',
                 'skirt': 'Skirt',
                 'blouse': 'Blouse',
-                'top': 'Top',
+                'tank top': 'Tank Top',
+                'crop top': 'Crop Top',
                 'bra': 'Sports Bra',
                 'sports bra': 'Sports Bra',
             },

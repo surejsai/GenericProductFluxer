@@ -3,7 +3,7 @@ import pathlib
 import unittest
 from unittest.mock import patch
 
-from serp_services.get_popular_products import AggregatedResults, ProductHit, SerpProcessor
+from src.fluxer.search.serp_processor import AggregatedResults, ProductHit, SerpProcessor
 
 
 class TestSerpProcessor(unittest.TestCase):
@@ -11,7 +11,7 @@ class TestSerpProcessor(unittest.TestCase):
         sample_path = pathlib.Path("sample_data") / "blue dress.json"
         self.sample_payload = json.loads(sample_path.read_text())
 
-    @patch("serp_processor.GoogleSearch")
+    @patch("src.fluxer.search.serp_processor.GoogleSearch")
     def test_fetch_products_from_sample_file(self, mock_search_cls):
         mock_instance = mock_search_cls.return_value
         mock_instance.get_dict.return_value = self.sample_payload

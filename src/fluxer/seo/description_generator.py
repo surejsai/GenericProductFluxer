@@ -26,13 +26,14 @@ logger = get_logger(__name__)
 SYSTEM_MESSAGE = """You are a professional ecommerce SEO copywriter.
 Write accurate, natural product descriptions.
 Never invent features, materials, sizes, performance claims, or specifications.
-Only use facts that appear in the provided Source Text."""
+Only use facts that appear in the provided Source Text.
+IMPORTANT: NEVER include brand names, manufacturer names, or specific product model numbers in your output."""
 
 
 # User prompt template
 USER_PROMPT_TEMPLATE = """Write ONE SEO-friendly product description paragraph (70–120 words).
 
-Product name: {product_name}
+Generic product type: {product_name}
 Price (optional mention): {price}
 
 Source Text (facts only, do not go beyond this):
@@ -42,11 +43,13 @@ Recommended Keywords / Phrases (use 6–10 naturally, no stuffing):
 {keywords_list}
 
 Guidelines:
-- First sentence: include the product name and a primary keyword.
+- CRITICAL: Do NOT mention any brand names, manufacturer names, or specific product model numbers (e.g., no "Westinghouse", "Samsung", "WRF610SA", etc.).
+- First sentence: describe the generic product type with a primary keyword.
 - Middle: weave in remaining keywords while describing real features from Source Text.
 - End: brief benefit statement or call-to-action.
 - Do NOT hallucinate specs, dimensions, or features not in Source Text.
-- Output ONLY the paragraph—no headings, bullet points, or meta commentary."""
+- Output ONLY the paragraph—no headings, bullet points, or meta commentary.
+- Write as if describing a generic product category, not a specific branded item."""
 
 
 @dataclass

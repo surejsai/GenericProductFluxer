@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inlined - Entity Analysis</title>
+  <title>Entity Analysis</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
@@ -273,6 +273,20 @@
       font-size: 12px;
       color: var(--text);
       border: 1px solid rgba(212, 175, 90, 0.15);
+    }
+
+    /* Hidden terms container - displays inline with same spacing */
+    .hidden-terms {
+      display: contents;  /* Makes children flow as if they were direct children of parent */
+    }
+
+    .expand-btn {
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .expand-btn:hover {
+      transform: scale(1.05);
     }
 
     /* Supporting Entities */
@@ -726,6 +740,86 @@
     .conflict-item:last-child {
       margin-bottom: 0;
     }
+
+    /* Info Icon & Confidence Explanation */
+    .info-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      font-size: 12px;
+      font-weight: bold;
+      background: rgba(168, 179, 216, 0.2);
+      border-radius: 50%;
+      cursor: pointer;
+      margin-left: 6px;
+      color: var(--accent-2);
+      transition: all 0.2s;
+    }
+
+    .info-icon:hover {
+      background: var(--accent-2);
+      color: var(--bg);
+      transform: scale(1.1);
+    }
+
+    .confidence-explanation {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      animation: slideDown 0.2s ease-out;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .explanation-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      color: var(--accent);
+    }
+
+    .explanation-header .close-btn {
+      cursor: pointer;
+      font-size: 20px;
+      color: var(--muted);
+      transition: color 0.2s;
+    }
+
+    .explanation-header .close-btn:hover {
+      color: var(--text);
+    }
+
+    .explanation-content {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .explanation-content p {
+      margin: 8px 0;
+    }
+
+    .explanation-content ul {
+      margin: 8px 0 12px 0;
+      padding-left: 20px;
+    }
+
+    .explanation-content li {
+      margin-bottom: 6px;
+      color: var(--muted);
+    }
+
+    .explanation-content li strong {
+      color: var(--text);
+    }
   </style>
 </head>
 <body>
@@ -733,7 +827,6 @@
     <nav class="nav">
       <a href="/" class="logo">
         <img src="/static/inlined-logo.png" alt="Inlined" style="height: 34px; width: auto; border-radius: 8px;">
-        Inlined
       </a>
       <div class="nav-links">
         <a href="/" class="nav-link">Extract</a>
@@ -778,11 +871,36 @@
         <div class="confidence-badge">
           <span class="confidence-label">Extraction Confidence:</span>
           <span class="confidence-value" id="confidenceValue">--</span>
+          <span class="info-icon" onclick="toggleConfidenceInfo()" title="What is this?">&#x2139;</span>
         </div>
         <div class="confidence-bar">
           <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
         </div>
         <span class="llm-badge skipped" id="llmBadge">Rules Only</span>
+      </div>
+
+      <!-- Confidence Explanation (hidden by default) -->
+      <div id="confidenceExplanation" class="confidence-explanation" style="display: none;">
+        <div class="explanation-header">
+          <strong>&#x1F4A1; What is Extraction Confidence?</strong>
+          <span class="close-btn" onclick="toggleConfidenceInfo()">×</span>
+        </div>
+        <div class="explanation-content">
+          <p><strong>How it's calculated:</strong></p>
+          <ul>
+            <li><strong>Base score:</strong> Starts at 30% just for having data to analyze</li>
+            <li><strong>+Points for entities found:</strong> Each entity type (material, dimension, finish, etc.) adds ~10%</li>
+            <li><strong>-Points for missing critical types:</strong> Missing "material" or "dimension" subtracts ~15% each</li>
+            <li><strong>-Points for conflicts:</strong> Contradictory information reduces confidence by ~10%</li>
+            <li><strong>LLM agreement bonus:</strong> If both rules and LLM agree, confidence increases</li>
+          </ul>
+          <p><strong>What the score means:</strong></p>
+          <ul>
+            <li><span style="color: #52c77a;">70%+ (Green):</span> High confidence - entities are well-identified</li>
+            <li><span style="color: #d4af5a;">50-70% (Yellow):</span> Medium - some information may be missing</li>
+            <li><span style="color: #ef4444;">Below 50% (Red):</span> Low - critical entity types are likely missing</li>
+          </ul>
+        </div>
       </div>
 
       <!-- Primary Entity -->
@@ -884,6 +1002,16 @@
   </main>
 
   <script>
+    // Safe element getter - prevents null reference errors
+    function safeGet(id) {
+      try {
+        return document.getElementById(id);
+      } catch (e) {
+        console.warn(`Element #${id} not found`);
+        return null;
+      }
+    }
+
     // Store data globally for export
     let entityData = null;
     let seoData = null;
@@ -944,10 +1072,14 @@
       }
 
       // Show loading
-      document.getElementById('loadingState').style.display = 'block';
-      document.getElementById('emptyState').style.display = 'none';
-      document.getElementById('resultsContainer').style.display = 'none';
-      document.getElementById('extractBtn').disabled = true;
+      const loadingEl = safeGet('loadingState');
+      const emptyEl = safeGet('emptyState');
+      const resultsEl = safeGet('resultsContainer');
+      const extractBtnEl = safeGet('extractBtn');
+      if (loadingEl) loadingEl.style.display = 'block';
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (resultsEl) resultsEl.style.display = 'none';
+      if (extractBtnEl) extractBtnEl.disabled = true;
 
       try {
         // Call entity extraction API with search query for better context
@@ -981,53 +1113,70 @@
       } catch (error) {
         console.error('Entity extraction error:', error);
         alert('Error extracting entities: ' + error.message);
-        document.getElementById('emptyState').style.display = 'block';
+        const emptyState = safeGet('emptyState');
+        if (emptyState) emptyState.style.display = 'block';
       } finally {
-        document.getElementById('loadingState').style.display = 'none';
-        document.getElementById('extractBtn').disabled = false;
+        const loadingState = safeGet('loadingState');
+        const extractBtn = safeGet('extractBtn');
+        if (loadingState) loadingState.style.display = 'none';
+        if (extractBtn) extractBtn.disabled = false;
       }
     }
 
     function displayResults(data) {
-      document.getElementById('emptyState').style.display = 'none';
-      document.getElementById('resultsContainer').style.display = 'block';
-      document.getElementById('exportBtn').disabled = false;
+      const emptyState = safeGet('emptyState');
+      const resultsContainer = safeGet('resultsContainer');
+      const exportBtn = safeGet('exportBtn');
+      if (emptyState) emptyState.style.display = 'none';
+      if (resultsContainer) resultsContainer.style.display = 'block';
+      if (exportBtn) exportBtn.disabled = false;
 
       // Confidence display
       const confidence = data.confidence || 0;
       const confidencePercent = Math.round(confidence * 100);
       const confidenceClass = confidence >= 0.7 ? 'high' : confidence >= 0.4 ? 'medium' : 'low';
 
-      document.getElementById('confidenceValue').textContent = confidencePercent + '%';
-      document.getElementById('confidenceValue').className = 'confidence-value ' + confidenceClass;
-      document.getElementById('confidenceFill').style.width = confidencePercent + '%';
-      document.getElementById('confidenceFill').className = 'confidence-fill ' + confidenceClass;
+      const confidenceValue = safeGet('confidenceValue');
+      const confidenceFill = safeGet('confidenceFill');
+      if (confidenceValue) {
+        confidenceValue.textContent = confidencePercent + '%';
+        confidenceValue.className = 'confidence-value ' + confidenceClass;
+      }
+      if (confidenceFill) {
+        confidenceFill.style.width = confidencePercent + '%';
+        confidenceFill.className = 'confidence-fill ' + confidenceClass;
+      }
 
       // LLM badge
-      const llmBadge = document.getElementById('llmBadge');
-      if (data.audit && data.audit.llm_invoked) {
-        llmBadge.textContent = 'LLM Used';
-        llmBadge.className = 'llm-badge invoked';
-        llmBadge.title = data.audit.llm_reason || 'LLM was invoked';
-      } else {
-        llmBadge.textContent = 'Rules Only';
-        llmBadge.className = 'llm-badge skipped';
-        llmBadge.title = 'LLM extraction was not needed';
+      const llmBadge = safeGet('llmBadge');
+      if (llmBadge) {
+        if (data.audit && data.audit.llm_invoked) {
+          llmBadge.textContent = 'LLM Used';
+          llmBadge.className = 'llm-badge invoked';
+          llmBadge.title = data.audit.llm_reason || 'LLM was invoked';
+        } else {
+          llmBadge.textContent = 'Rules Only';
+          llmBadge.className = 'llm-badge skipped';
+          llmBadge.title = 'LLM extraction was not needed';
+        }
       }
 
       // Primary Entity Path
-      const pathParts = data.primary_entity_path.split(' > ');
+      const pathParts = (data.primary_entity_path || 'Unknown').split(' > ');
       const pathHtml = pathParts.map((part, i) => {
         if (i < pathParts.length - 1) {
           return `<span>${part}</span><span class="path-separator">›</span>`;
         }
         return `<span>${part}</span>`;
       }).join('');
-      document.getElementById('primaryEntityPath').innerHTML = pathHtml;
-      document.getElementById('productNameBadge').textContent = data.product_name;
+      const primaryEntityPath = safeGet('primaryEntityPath');
+      const productNameBadge = safeGet('productNameBadge');
+      if (primaryEntityPath) primaryEntityPath.innerHTML = pathHtml;
+      if (productNameBadge) productNameBadge.textContent = data.product_name;
 
       // Grouped Terms
-      const termsGrid = document.getElementById('termsGrid');
+      const termsGrid = safeGet('termsGrid');
+      if (!termsGrid) return;
       termsGrid.innerHTML = '';
 
       const bucketOrder = ['Core Attributes', 'Functional Terms', 'Usage Context', 'Compliance / Standards'];
@@ -1042,6 +1191,11 @@
         const terms = data.grouped_terms[bucket] || [];
         if (terms.length === 0) continue;
 
+        const bucketId = bucket.replace(/[^a-zA-Z]/g, '').toLowerCase();
+        const visibleTerms = terms.slice(0, 15);
+        const hiddenTerms = terms.slice(15);
+        const hasMore = hiddenTerms.length > 0;
+
         const bucketHtml = `
           <div class="term-bucket">
             <div class="bucket-header">
@@ -1050,8 +1204,11 @@
               <span class="bucket-count">${terms.length}</span>
             </div>
             <div class="term-list">
-              ${terms.slice(0, 15).map(t => `<span class="term-tag">${t}</span>`).join('')}
-              ${terms.length > 15 ? `<span class="term-tag" style="opacity: 0.6;">+${terms.length - 15} more</span>` : ''}
+              ${visibleTerms.map(t => `<span class="term-tag">${t}</span>`).join('')}
+              <span id="hidden-${bucketId}" class="hidden-terms" style="display: none;">
+                ${hiddenTerms.map(t => `<span class="term-tag">${t}</span>`).join('')}
+              </span>
+              ${hasMore ? `<span class="term-tag expand-btn" onclick="toggleTerms('${bucketId}', ${hiddenTerms.length})" id="expand-${bucketId}" style="opacity: 0.8; cursor: pointer; background: var(--accent); color: var(--bg);">+${hiddenTerms.length} more</span>` : ''}
             </div>
           </div>
         `;
@@ -1059,26 +1216,29 @@
       }
 
       // Supporting Entities
-      const entitiesGrid = document.getElementById('entitiesGrid');
-      entitiesGrid.innerHTML = '';
+      const entitiesGrid = safeGet('entitiesGrid');
+      if (entitiesGrid) {
+        entitiesGrid.innerHTML = '';
 
-      if (data.supporting_entities.length === 0) {
-        entitiesGrid.innerHTML = '<p style="color: var(--muted); grid-column: 1/-1;">No supporting entities identified.</p>';
-      } else {
-        for (const entity of data.supporting_entities) {
-          const entityHtml = `
-            <div class="entity-card ${entity.type}">
-              <div class="entity-name">${entity.name}</div>
-              <span class="entity-type ${entity.type}">${entity.type}</span>
-              <div class="entity-why">${entity.why_it_matters}</div>
-            </div>
-          `;
-          entitiesGrid.innerHTML += entityHtml;
+        if (data.supporting_entities.length === 0) {
+          entitiesGrid.innerHTML = '<p style="color: var(--muted); grid-column: 1/-1;">No supporting entities identified.</p>';
+        } else {
+          for (const entity of data.supporting_entities) {
+            const entityHtml = `
+              <div class="entity-card ${entity.type}">
+                <div class="entity-name">${entity.name}</div>
+                <span class="entity-type ${entity.type}">${entity.type}</span>
+                <div class="entity-why">${entity.why_it_matters}</div>
+              </div>
+            `;
+            entitiesGrid.innerHTML += entityHtml;
+          }
         }
       }
 
       // Placement Guide
-      const placementList = document.getElementById('placementList');
+      const placementList = safeGet('placementList');
+      if (!placementList) return;
       placementList.innerHTML = '';
 
       if (data.placement_map.length === 0) {
@@ -1101,18 +1261,20 @@
       }
 
       // Noise Terms
-      const noiseTerms = document.getElementById('noiseTerms');
-      noiseTerms.innerHTML = '';
+      const noiseTerms = safeGet('noiseTerms');
+      if (noiseTerms) {
+        noiseTerms.innerHTML = '';
 
-      if (data.noise_terms && data.noise_terms.length > 0) {
-        for (const term of data.noise_terms.slice(0, 50)) {
-          noiseTerms.innerHTML += `<span class="noise-tag">${term}</span>`;
+        if (data.noise_terms && data.noise_terms.length > 0) {
+          for (const term of data.noise_terms.slice(0, 50)) {
+            noiseTerms.innerHTML += `<span class="noise-tag">${term}</span>`;
+          }
+          if (data.noise_terms.length > 50) {
+            noiseTerms.innerHTML += `<span class="noise-tag" style="opacity: 0.6;">+${data.noise_terms.length - 50} more</span>`;
+          }
+        } else {
+          noiseTerms.innerHTML = '<span style="color: var(--muted);">No noise terms identified.</span>';
         }
-        if (data.noise_terms.length > 50) {
-          noiseTerms.innerHTML += `<span class="noise-tag" style="opacity: 0.6;">+${data.noise_terms.length - 50} more</span>`;
-        }
-      } else {
-        noiseTerms.innerHTML = '<span style="color: var(--muted);">No noise terms identified.</span>';
       }
 
       // Debug Section: Rules vs LLM Entities
@@ -1120,95 +1282,134 @@
       const llmEntities = data.llm_entities || [];
 
       // Update counts
-      document.getElementById('rulesCount').textContent = ruleEntities.length;
-      document.getElementById('llmCount').textContent = llmEntities.length;
+      const rulesCount = safeGet('rulesCount');
+      const llmCount = safeGet('llmCount');
+      if (rulesCount) rulesCount.textContent = ruleEntities.length;
+      if (llmCount) llmCount.textContent = llmEntities.length;
 
       // Rules entities
-      const rulesContainer = document.getElementById('rulesEntities');
-      rulesContainer.innerHTML = '';
-      if (ruleEntities.length === 0) {
-        rulesContainer.innerHTML = '<p style="color: var(--muted); font-size: 12px;">No entities from rules.</p>';
-      } else {
-        for (const entity of ruleEntities) {
-          rulesContainer.innerHTML += `
-            <div class="debug-entity rules">
-              <div class="debug-entity-name">${entity.name}</div>
-              <div class="debug-entity-meta">${entity.type}${entity.value ? ` • ${entity.value}${entity.unit || ''}` : ''}</div>
-              ${entity.evidence ? `<div class="debug-entity-evidence">"${entity.evidence.substring(0, 100)}${entity.evidence.length > 100 ? '...' : ''}"</div>` : ''}
-            </div>
-          `;
+      const rulesContainer = safeGet('rulesEntities');
+      if (rulesContainer) {
+        rulesContainer.innerHTML = '';
+        if (ruleEntities.length === 0) {
+          rulesContainer.innerHTML = '<p style="color: var(--muted); font-size: 12px;">No entities from rules.</p>';
+        } else {
+          for (const entity of ruleEntities) {
+            rulesContainer.innerHTML += `
+              <div class="debug-entity rules">
+                <div class="debug-entity-name">${entity.name}</div>
+                <div class="debug-entity-meta">${entity.type}${entity.value ? ` • ${entity.value}${entity.unit || ''}` : ''}</div>
+                ${entity.evidence ? `<div class="debug-entity-evidence">"${entity.evidence.substring(0, 100)}${entity.evidence.length > 100 ? '...' : ''}"</div>` : ''}
+              </div>
+            `;
+          }
         }
       }
 
       // LLM entities
-      const llmContainer = document.getElementById('llmEntities');
-      llmContainer.innerHTML = '';
-      if (llmEntities.length === 0) {
-        llmContainer.innerHTML = '<p style="color: var(--muted); font-size: 12px;">No entities from LLM (not invoked or no results).</p>';
-      } else {
-        for (const entity of llmEntities) {
-          llmContainer.innerHTML += `
-            <div class="debug-entity llm">
-              <div class="debug-entity-name">${entity.name}</div>
-              <div class="debug-entity-meta">${entity.type}${entity.value ? ` • ${entity.value}${entity.unit || ''}` : ''}</div>
-              ${entity.evidence ? `<div class="debug-entity-evidence">"${entity.evidence.substring(0, 100)}${entity.evidence.length > 100 ? '...' : ''}"</div>` : ''}
-            </div>
-          `;
+      const llmContainer = safeGet('llmEntities');
+      if (llmContainer) {
+        llmContainer.innerHTML = '';
+        if (llmEntities.length === 0) {
+          llmContainer.innerHTML = '<p style="color: var(--muted); font-size: 12px;">No entities from LLM (not invoked or no results).</p>';
+        } else {
+          for (const entity of llmEntities) {
+            llmContainer.innerHTML += `
+              <div class="debug-entity llm">
+                <div class="debug-entity-name">${entity.name}</div>
+                <div class="debug-entity-meta">${entity.type}${entity.value ? ` • ${entity.value}${entity.unit || ''}` : ''}</div>
+                ${entity.evidence ? `<div class="debug-entity-evidence">"${entity.evidence.substring(0, 100)}${entity.evidence.length > 100 ? '...' : ''}"</div>` : ''}
+              </div>
+            `;
+          }
         }
       }
 
       // Conflicts
-      const conflictsSection = document.getElementById('conflictsSection');
-      const conflictsList = document.getElementById('conflictsList');
+      const conflictsSection = safeGet('conflictsSection');
+      const conflictsList = safeGet('conflictsList');
       const conflicts = data.audit?.conflicts || [];
 
-      if (conflicts.length > 0) {
-        conflictsSection.style.display = 'block';
-        conflictsList.innerHTML = '';
-        for (const conflict of conflicts) {
-          conflictsList.innerHTML += `
-            <div class="conflict-item">
-              <strong>${conflict.entity_type}:</strong> Rules="${conflict.rule_value}" vs LLM="${conflict.llm_value}"
-              <br><small>Resolution: ${conflict.resolution} - ${conflict.reason}</small>
-            </div>
-          `;
+      if (conflictsSection && conflictsList) {
+        if (conflicts.length > 0) {
+          conflictsSection.style.display = 'block';
+          conflictsList.innerHTML = '';
+          for (const conflict of conflicts) {
+            conflictsList.innerHTML += `
+              <div class="conflict-item">
+                <strong>${conflict.entity_type}:</strong> Rules="${conflict.rule_value}" vs LLM="${conflict.llm_value}"
+                <br><small>Resolution: ${conflict.resolution} - ${conflict.reason}</small>
+              </div>
+            `;
+          }
+        } else {
+          conflictsSection.style.display = 'none';
         }
-      } else {
-        conflictsSection.style.display = 'none';
       }
 
       // Audit notes
-      const auditNotes = document.getElementById('auditNotes');
-      auditNotes.innerHTML = '';
-      const notes = data.audit?.notes || [];
+      const auditNotes = safeGet('auditNotes');
+      if (auditNotes) {
+        auditNotes.innerHTML = '';
+        const notes = data.audit?.notes || [];
 
-      if (notes.length > 0) {
-        for (const note of notes) {
-          auditNotes.innerHTML += `<div class="audit-note">${note}</div>`;
+        if (notes.length > 0) {
+          for (const note of notes) {
+            auditNotes.innerHTML += `<div class="audit-note">${note}</div>`;
+          }
+        } else {
+          auditNotes.innerHTML = '<div class="audit-note">No audit notes available.</div>';
         }
-      } else {
-        auditNotes.innerHTML = '<div class="audit-note">No audit notes available.</div>';
-      }
 
-      // Show missing types if any
-      const missingTypes = data.audit?.missing_types || [];
-      if (missingTypes.length > 0) {
-        auditNotes.innerHTML += `<div class="audit-note">Missing entity types: ${missingTypes.join(', ')}</div>`;
+        // Show missing types if any
+        const missingTypes = data.audit?.missing_types || [];
+        if (missingTypes.length > 0) {
+          auditNotes.innerHTML += `<div class="audit-note">Missing entity types: ${missingTypes.join(', ')}</div>`;
+        }
+      }
+    }
+
+    function toggleConfidenceInfo() {
+      const explanation = safeGet('confidenceExplanation');
+      if (explanation) {
+        if (explanation.style.display === 'none') {
+          explanation.style.display = 'block';
+        } else {
+          explanation.style.display = 'none';
+        }
+      }
+    }
+
+    function toggleTerms(bucketId, count) {
+      const hiddenEl = safeGet('hidden-' + bucketId);
+      const expandBtn = safeGet('expand-' + bucketId);
+
+      if (hiddenEl && expandBtn) {
+        if (hiddenEl.style.display === 'none') {
+          // Use 'contents' to make children flow naturally in the flex container
+          hiddenEl.style.display = 'contents';
+          expandBtn.textContent = '− Show less';
+          expandBtn.style.background = 'var(--muted)';
+        } else {
+          hiddenEl.style.display = 'none';
+          expandBtn.textContent = '+' + count + ' more';
+          expandBtn.style.background = 'var(--accent)';
+        }
       }
     }
 
     function toggleNoise() {
-      const toggle = document.getElementById('noiseToggle');
-      const content = document.getElementById('noiseContent');
-      toggle.classList.toggle('open');
-      content.classList.toggle('show');
+      const toggle = safeGet('noiseToggle');
+      const content = safeGet('noiseContent');
+      if (toggle) toggle.classList.toggle('open');
+      if (content) content.classList.toggle('show');
     }
 
     function toggleDebug() {
-      const toggle = document.getElementById('debugToggle');
-      const content = document.getElementById('debugContent');
-      toggle.classList.toggle('open');
-      content.classList.toggle('show');
+      const toggle = safeGet('debugToggle');
+      const content = safeGet('debugContent');
+      if (toggle) toggle.classList.toggle('open');
+      if (content) content.classList.toggle('show');
     }
 
     function exportEntities() {

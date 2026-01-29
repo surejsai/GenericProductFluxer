@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inlined - Product Intelligence</title>
+  <title>Product Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
@@ -653,6 +653,16 @@
     let currentProducts = [];
     let currentQuery = '';
 
+    // Safe element getter - prevents null reference errors
+    function safeGet(id) {
+      try {
+        return document.getElementById(id);
+      } catch (e) {
+        console.warn(`Element #${id} not found`);
+        return null;
+      }
+    }
+
     // Check for existing results on page load
     document.addEventListener('DOMContentLoaded', () => {
       const storedResults = sessionStorage.getItem('extractionResults');
@@ -664,7 +674,8 @@
           if (results && results.length > 0) {
             currentQuery = storedQuery;
             currentProducts = results;
-            document.getElementById('query-input').value = currentQuery;
+            const queryInput = safeGet('query-input');
+            if (queryInput) queryInput.value = currentQuery;
             // Show results page
             displayResults(results, []);
             showPage(3);
@@ -678,7 +689,8 @@
     // Page navigation
     function showPage(pageNum) {
       document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
-      document.getElementById(`page-${pageNum}`).classList.add('active');
+      const page = safeGet(`page-${pageNum}`);
+      if (page) page.classList.add('active');
 
       document.querySelectorAll('.page-dot').forEach(dot => {
         dot.classList.remove('active');
@@ -690,7 +702,8 @@
 
     // Add loading item
     function addLoadingItem(text, id) {
-      const list = document.getElementById('loading-list');
+      const list = safeGet('loading-list');
+      if (!list) return null;
       const item = document.createElement('li');
       item.className = 'loading-item';
       item.id = id;
@@ -704,36 +717,41 @@
 
     // Update loading item
     function updateLoadingItem(id, text, status = 'loading') {
-      const item = document.getElementById(id);
+      const item = safeGet(id);
       if (!item) return;
 
       const spinner = item.querySelector('.loading-spinner');
       const textEl = item.querySelector('.loading-text');
 
-      textEl.textContent = text;
+      if (textEl) textEl.textContent = text;
 
       if (status === 'success') {
-        spinner.classList.add('success');
-        textEl.classList.add('success');
+        if (spinner) spinner.classList.add('success');
+        if (textEl) textEl.classList.add('success');
       } else if (status === 'error') {
-        spinner.classList.add('error');
-        textEl.classList.add('error');
+        if (spinner) spinner.classList.add('error');
+        if (textEl) textEl.classList.add('error');
       }
     }
 
     // Show error
     function showError(message) {
-      const container = document.getElementById('error-container');
-      container.innerHTML = `
-        <div class="error-message">
-          <strong>Error:</strong> ${message}
-        </div>
-      `;
+      const container = safeGet('error-container');
+      if (container) {
+        container.innerHTML = `
+          <div class="error-message">
+            <strong>Error:</strong> ${message}
+          </div>
+        `;
+      }
+      console.error('Application error:', message);
     }
 
     // Start button handler
-    document.getElementById('start-btn').addEventListener('click', async () => {
-      const query = document.getElementById('query-input').value.trim();
+    const startBtn = safeGet('start-btn');
+    if (startBtn) startBtn.addEventListener('click', async () => {
+      const queryInput = safeGet('query-input');
+      const query = queryInput ? queryInput.value.trim() : '';
 
       if (!query) {
         alert('Please enter a product search query');
@@ -746,9 +764,12 @@
 
       // Move to page 2
       showPage(2);
-      document.getElementById('loading-list').innerHTML = '';
-      document.getElementById('error-container').innerHTML = '';
-      document.getElementById('loading-subtitle').textContent = 'Searching for popular products...';
+      const loadingList = safeGet('loading-list');
+      const errorContainer = safeGet('error-container');
+      const loadingSubtitle = safeGet('loading-subtitle');
+      if (loadingList) loadingList.innerHTML = '';
+      if (errorContainer) errorContainer.innerHTML = '';
+      if (loadingSubtitle) loadingSubtitle.textContent = 'Searching for popular products...';
 
       try {
         // Step 1: Search for products
@@ -779,7 +800,8 @@
 
         // Step 2: Show extraction starting
         await new Promise(resolve => setTimeout(resolve, 500));
-        document.getElementById('loading-subtitle').textContent = 'Extracting product descriptions in parallel...';
+        const extractSubtitle = safeGet('loading-subtitle');
+        if (extractSubtitle) extractSubtitle.textContent = 'Extracting product descriptions in parallel...';
 
         // Show first 5 products as primary targets
         const primaryCount = Math.min(5, currentProducts.length);
@@ -855,11 +877,16 @@
 
     // Display results
     function displayResults(results, backupsUsed = []) {
-      const grid = document.getElementById('results-grid');
+      const grid = safeGet('results-grid');
+      if (!grid) {
+        console.error('Results grid not found');
+        return;
+      }
       const successResults = results.filter(r => !r.error);
       const failedResults = results.filter(r => r.error);
 
-      document.getElementById('results-count').textContent = successResults.length;
+      const resultsCount = safeGet('results-count');
+      if (resultsCount) resultsCount.textContent = successResults.length;
 
       let subtitle = `Found ${successResults.length} products with detailed information`;
       if (failedResults.length > 0) {
@@ -868,7 +895,8 @@
       if (backupsUsed.length > 0) {
         subtitle += ` - ${backupsUsed.length} backup(s) used`;
       }
-      document.getElementById('results-subtitle').textContent = subtitle;
+      const resultsSubtitle = safeGet('results-subtitle');
+      if (resultsSubtitle) resultsSubtitle.textContent = subtitle;
 
       grid.innerHTML = '';
 
@@ -954,8 +982,10 @@
     }
 
     // Back button (New Search)
-    document.getElementById('back-btn').addEventListener('click', () => {
-      document.getElementById('query-input').value = '';
+    const backBtn = safeGet('back-btn');
+    if (backBtn) backBtn.addEventListener('click', () => {
+      const queryInput = safeGet('query-input');
+      if (queryInput) queryInput.value = '';
       currentProducts = [];
       currentQuery = '';
       // Clear sessionStorage for fresh search
@@ -968,7 +998,8 @@
     });
 
     // Export button
-    document.getElementById('export-btn').addEventListener('click', () => {
+    const exportBtn = safeGet('export-btn');
+    if (exportBtn) exportBtn.addEventListener('click', () => {
       const data = {
         query: currentQuery,
         timestamp: new Date().toISOString(),
@@ -985,15 +1016,18 @@
     });
 
     // SEO Analysis button
-    document.getElementById('seo-btn').addEventListener('click', () => {
+    const seoBtn = safeGet('seo-btn');
+    if (seoBtn) seoBtn.addEventListener('click', () => {
       // Navigate to SEO analysis page (data already stored in sessionStorage)
       window.location.href = '/seo';
     });
 
     // Enter key handler
-    document.getElementById('query-input').addEventListener('keypress', (e) => {
+    const queryInputEl = safeGet('query-input');
+    if (queryInputEl) queryInputEl.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-        document.getElementById('start-btn').click();
+        const startBtnEl = safeGet('start-btn');
+        if (startBtnEl) startBtnEl.click();
       }
     });
   </script>

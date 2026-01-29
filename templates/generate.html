@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inlined - SEO Description Generator</title>
+  <title>SEO Description Generator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
@@ -471,7 +471,6 @@
     <nav class="nav">
       <a href="/" class="logo">
         <img src="/static/inlined-logo.png" alt="Inlined" style="height: 34px; width: auto; border-radius: 8px;">
-        <span>Inlined</span>
       </a>
       <div class="nav-links">
         <a href="/" class="nav-link">Extract</a>
@@ -582,20 +581,30 @@
   </main>
 
   <script>
+    // Safe element getter - prevents null reference errors
+    function safeGet(id) {
+      try {
+        return document.getElementById(id);
+      } catch (e) {
+        console.warn(`Element #${id} not found`);
+        return null;
+      }
+    }
+
     // State
     let extractionResults = [];
     let seoKeywords = [];
     let generatedDescription = null;
 
     // DOM elements
-    const emptyState = document.getElementById('empty-state');
-    const loadingState = document.getElementById('loading-state');
-    const errorState = document.getElementById('error-state');
-    const descriptionCard = document.getElementById('description-card');
-    const generateBtn = document.getElementById('generate-btn');
-    const exportTxtBtn = document.getElementById('export-txt-btn');
-    const exportJsonBtn = document.getElementById('export-json-btn');
-    const copyBtn = document.getElementById('copy-btn');
+    const emptyState = safeGet('empty-state');
+    const loadingState = safeGet('loading-state');
+    const errorState = safeGet('error-state');
+    const descriptionCard = safeGet('description-card');
+    const generateBtn = safeGet('generate-btn');
+    const exportTxtBtn = safeGet('export-txt-btn');
+    const exportJsonBtn = safeGet('export-json-btn');
+    const copyBtn = safeGet('copy-btn');
 
     // Check for data on load
     document.addEventListener('DOMContentLoaded', () => {
@@ -615,7 +624,8 @@
           extractionResults = JSON.parse(storedResults);
           if (extractionResults && extractionResults.length > 0) {
             hasData = true;
-            document.getElementById('stat-products').textContent = extractionResults.length;
+            const statProducts = safeGet('stat-products');
+            if (statProducts) statProducts.textContent = extractionResults.length;
           }
         } catch (e) {
           console.error('Error parsing extraction results:', e);
@@ -626,7 +636,8 @@
         try {
           seoKeywords = JSON.parse(storedKeywords);
           if (seoKeywords && seoKeywords.length > 0) {
-            document.getElementById('stat-keywords').textContent = seoKeywords.length;
+            const statKeywords = safeGet('stat-keywords');
+            if (statKeywords) statKeywords.textContent = seoKeywords.length;
           }
         } catch (e) {
           console.error('Error parsing SEO keywords:', e);
@@ -636,13 +647,15 @@
       // If we have extraction results but no keywords, use a default set
       if (hasData && (!seoKeywords || seoKeywords.length === 0)) {
         seoKeywords = generateBasicKeywords(extractionResults);
-        document.getElementById('stat-keywords').textContent = seoKeywords.length;
+        const statKeywords = safeGet('stat-keywords');
+        if (statKeywords) statKeywords.textContent = seoKeywords.length;
       }
 
       if (hasData) {
-        emptyState.classList.add('hidden');
-        generateBtn.disabled = false;
-        document.getElementById('page-subtitle').textContent =
+        if (emptyState) emptyState.classList.add('hidden');
+        if (generateBtn) generateBtn.disabled = false;
+        const pageSubtitle = safeGet('page-subtitle');
+        if (pageSubtitle) pageSubtitle.textContent =
           `Ready to generate a single SEO description from ${extractionResults.length} products using ${seoKeywords.length} keywords.`;
 
         // Restore previously generated description if available
@@ -650,9 +663,10 @@
           try {
             generatedDescription = JSON.parse(storedDescription);
             renderDescription();
-            exportTxtBtn.disabled = false;
-            exportJsonBtn.disabled = false;
-            document.getElementById('stat-words').textContent = generatedDescription.word_count;
+            if (exportTxtBtn) exportTxtBtn.disabled = false;
+            if (exportJsonBtn) exportJsonBtn.disabled = false;
+            const statWords = safeGet('stat-words');
+            if (statWords) statWords.textContent = generatedDescription.word_count;
           } catch (e) {
             console.error('Error parsing stored description:', e);
           }
@@ -731,57 +745,70 @@
         sessionStorage.setItem('generatedDescription', JSON.stringify(generatedDescription));
 
         // Enable export buttons
-        exportTxtBtn.disabled = false;
-        exportJsonBtn.disabled = false;
+        if (exportTxtBtn) exportTxtBtn.disabled = false;
+        if (exportJsonBtn) exportJsonBtn.disabled = false;
 
         // Update word count stat
-        document.getElementById('stat-words').textContent = generatedDescription.word_count;
+        const statWords = safeGet('stat-words');
+        if (statWords) statWords.textContent = generatedDescription.word_count;
 
       } catch (error) {
         console.error('Generation error:', error);
-        loadingState.classList.add('hidden');
-        errorState.classList.remove('hidden');
-        document.getElementById('error-text').textContent = `Generation failed: ${error.message}`;
+        if (loadingState) loadingState.classList.add('hidden');
+        if (errorState) errorState.classList.remove('hidden');
+        const errorText = safeGet('error-text');
+        if (errorText) errorText.textContent = `Generation failed: ${error.message}`;
       } finally {
-        generateBtn.disabled = false;
+        if (generateBtn) generateBtn.disabled = false;
       }
     });
 
     // Render the generated description
     function renderDescription() {
-      loadingState.classList.add('hidden');
-      descriptionCard.classList.remove('hidden');
+      if (loadingState) loadingState.classList.add('hidden');
+      if (descriptionCard) descriptionCard.classList.remove('hidden');
 
-      document.getElementById('result-product-name').textContent = generatedDescription.product_name;
+      const productName = safeGet('result-product-name');
+      if (productName) productName.textContent = generatedDescription.product_name;
 
-      const priceEl = document.getElementById('result-price');
-      if (generatedDescription.price) {
-        priceEl.textContent = generatedDescription.price;
-        priceEl.style.display = '';
-      } else {
-        priceEl.style.display = 'none';
+      const priceEl = safeGet('result-price');
+      if (priceEl) {
+        if (generatedDescription.price) {
+          priceEl.textContent = generatedDescription.price;
+          priceEl.style.display = '';
+        } else {
+          priceEl.style.display = 'none';
+        }
       }
 
-      document.getElementById('result-combined').textContent =
+      const combined = safeGet('result-combined');
+      if (combined) combined.textContent =
         `Combined from ${generatedDescription.products_combined} products`;
 
-      document.getElementById('result-description').textContent = generatedDescription.description;
-      document.getElementById('result-words').textContent = `${generatedDescription.word_count} words`;
-      document.getElementById('result-model').textContent = generatedDescription.model_used;
+      const descEl = safeGet('result-description');
+      if (descEl) descEl.textContent = generatedDescription.description;
+
+      const wordsEl = safeGet('result-words');
+      if (wordsEl) wordsEl.textContent = `${generatedDescription.word_count} words`;
+
+      const modelEl = safeGet('result-model');
+      if (modelEl) modelEl.textContent = generatedDescription.model_used;
 
       // Render keywords
-      const keywordsEl = document.getElementById('result-keywords');
-      if (generatedDescription.keywords_used && generatedDescription.keywords_used.length > 0) {
-        keywordsEl.innerHTML = generatedDescription.keywords_used
-          .map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`)
-          .join('');
-      } else {
-        keywordsEl.innerHTML = '<span style="color: var(--muted);">No keywords specified</span>';
+      const keywordsEl = safeGet('result-keywords');
+      if (keywordsEl) {
+        if (generatedDescription.keywords_used && generatedDescription.keywords_used.length > 0) {
+          keywordsEl.innerHTML = generatedDescription.keywords_used
+            .map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`)
+            .join('');
+        } else {
+          keywordsEl.innerHTML = '<span style="color: var(--muted);">No keywords specified</span>';
+        }
       }
     }
 
     // Copy description to clipboard
-    copyBtn.addEventListener('click', async () => {
+    if (copyBtn) copyBtn.addEventListener('click', async () => {
       if (!generatedDescription || !generatedDescription.description) return;
 
       try {
@@ -811,7 +838,7 @@
     });
 
     // Export as TXT
-    exportTxtBtn.addEventListener('click', async () => {
+    if (exportTxtBtn) exportTxtBtn.addEventListener('click', async () => {
       if (!generatedDescription) return;
 
       try {
@@ -833,7 +860,7 @@
     });
 
     // Export as JSON
-    exportJsonBtn.addEventListener('click', async () => {
+    if (exportJsonBtn) exportJsonBtn.addEventListener('click', async () => {
       if (!generatedDescription) return;
 
       try {

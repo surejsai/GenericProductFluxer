@@ -31,8 +31,9 @@ class Config:
     # Extractor configuration
     # Options: "html" (ScraperAPI + custom parsing) or "firecrawl" (Firecrawl LLM extraction)
     EXTRACTOR_TYPE: str = os.getenv("EXTRACTOR_TYPE", "firecrawl")
-    # Number of parallel workers for batch extraction (reduce for memory-constrained environments)
-    EXTRACTION_WORKERS: int = int(os.getenv("EXTRACTION_WORKERS", "2"))
+    # Number of parallel workers for batch extraction and SERP link enrichment
+    # Set to match your Firecrawl plan's concurrent request limit (e.g., 5 for upgraded plans)
+    EXTRACTION_WORKERS: int = int(os.getenv("EXTRACTION_WORKERS", "5"))
 
     # Entity extraction configuration
     # OpenAI model for LLM-based entity extraction (gap filling)

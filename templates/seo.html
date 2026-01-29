@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inlined - SEO Keyword Analysis</title>
+  <title>SEO Keyword Analysis</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
@@ -481,7 +481,6 @@
     <nav class="nav">
       <a href="/" class="logo">
         <img src="/static/inlined-logo.png" alt="Inlined" style="height: 34px; width: auto; border-radius: 8px;">
-        <span>Inlined</span>
       </a>
       <div class="nav-links">
         <a href="/" class="nav-link">Extract</a>
@@ -590,6 +589,16 @@
   </main>
 
   <script>
+    // Safe element getter - prevents null reference errors
+    function safeGet(id) {
+      try {
+        return document.getElementById(id);
+      } catch (e) {
+        console.warn(`Element #${id} not found`);
+        return null;
+      }
+    }
+
     // State
     let allPhrases = [];
     let filteredPhrases = [];
@@ -672,7 +681,8 @@
         generateBtn.disabled = false;
 
         // Update subtitle
-        document.getElementById('page-subtitle').textContent =
+        const pageSubtitle = safeGet('page-subtitle');
+        if (pageSubtitle) pageSubtitle.textContent =
           `Discovered ${allPhrases.length} SEO keywords from ${data.analysis.statistics.total_documents} product descriptions.`;
 
       } catch (error) {
@@ -687,11 +697,18 @@
 
     // Update statistics display
     function updateStats(stats) {
-      document.getElementById('stat-products').textContent = stats.total_products;
-      document.getElementById('stat-phrases').textContent = stats.unique_phrases;
-      document.getElementById('stat-tfidf').textContent = stats.phrases_from_tfidf;
-      document.getElementById('stat-spacy').textContent = stats.phrases_from_spacy;
-      document.getElementById('stat-both').textContent = stats.phrases_from_both;
+      const els = {
+        products: safeGet('stat-products'),
+        phrases: safeGet('stat-phrases'),
+        tfidf: safeGet('stat-tfidf'),
+        spacy: safeGet('stat-spacy'),
+        both: safeGet('stat-both')
+      };
+      if (els.products) els.products.textContent = stats.total_products;
+      if (els.phrases) els.phrases.textContent = stats.unique_phrases;
+      if (els.tfidf) els.tfidf.textContent = stats.phrases_from_tfidf;
+      if (els.spacy) els.spacy.textContent = stats.phrases_from_spacy;
+      if (els.both) els.both.textContent = stats.phrases_from_both;
     }
 
     // Filter and render phrases
