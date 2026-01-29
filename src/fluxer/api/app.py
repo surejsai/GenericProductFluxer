@@ -57,6 +57,12 @@ def create_app() -> Flask:
         """Serve the SEO description generator page."""
         return render_template('generate.html')
 
+    # Entity Analysis page
+    @app.route('/entities')
+    def entities_page():
+        """Serve the entity analysis page."""
+        return render_template('entities.html')
+
     # Health check
     @app.route('/health')
     def health():

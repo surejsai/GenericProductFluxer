@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fluxer Atelier - Product Intelligence</title>
+  <title>Inlined - Product Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
@@ -476,14 +476,14 @@
 <body>
   <header>
     <div class="nav">
-      <div class="logo">
-        <div class="logo-mark" aria-hidden="true"></div>
-        Fluxer Atelier
-      </div>
-      <div class="page-indicator">
-        <div class="page-dot active" data-page="1"></div>
-        <div class="page-dot" data-page="2"></div>
-        <div class="page-dot" data-page="3"></div>
+      <a href="/" class="logo" style="text-decoration: none; color: inherit;">
+        <img src="/static/inlined-logo.png" alt="Inlined" style="height: 34px; width: auto; border-radius: 8px;">
+      </a>
+      <div class="nav-links" style="display: flex; gap: 12px;">
+        <a href="/" class="nav-link active" style="padding: 8px 16px; border-radius: 8px; color: var(--accent); text-decoration: none; font-size: 14px; background: rgba(212, 175, 90, 0.15);">Extract</a>
+        <a href="/seo" class="nav-link" style="padding: 8px 16px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px;">TF-IDF</a>
+        <a href="/entities" class="nav-link" style="padding: 8px 16px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px;">Entities</a>
+        <a href="/generate" class="nav-link" style="padding: 8px 16px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px;">Generate</a>
       </div>
     </div>
   </header>
@@ -554,7 +554,7 @@
   </main>
 
   <footer>
-    Fluxer Atelier · Powered by SERP API & ScraperAPI · Advanced NLP Product Extraction
+    © 2025 Inlined · Product Intelligence Platform
   </footer>
 
   <script>
@@ -653,6 +653,28 @@
     let currentProducts = [];
     let currentQuery = '';
 
+    // Check for existing results on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      const storedResults = sessionStorage.getItem('extractionResults');
+      const storedQuery = sessionStorage.getItem('searchQuery');
+
+      if (storedResults && storedQuery) {
+        try {
+          const results = JSON.parse(storedResults);
+          if (results && results.length > 0) {
+            currentQuery = storedQuery;
+            currentProducts = results;
+            document.getElementById('query-input').value = currentQuery;
+            // Show results page
+            displayResults(results, []);
+            showPage(3);
+          }
+        } catch (e) {
+          console.error('Error restoring results:', e);
+        }
+      }
+    });
+
     // Page navigation
     function showPage(pageNum) {
       document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
@@ -719,6 +741,8 @@
       }
 
       currentQuery = query;
+      // Store query in sessionStorage for other pages
+      sessionStorage.setItem('searchQuery', query);
 
       // Move to page 2
       showPage(2);
@@ -739,11 +763,19 @@
         const searchData = await searchResponse.json();
 
         if (searchData.status === 'error') {
+          updateLoadingItem('search-products', searchData.message, 'error');
           throw new Error(searchData.message);
         }
 
-        updateLoadingItem('search-products', `Found ${searchData.count} products (10 fetched, targeting 5 extractions)`, 'success');
-        currentProducts = searchData.products;
+        currentProducts = searchData.products || [];
+
+        // Check if we have products to extract
+        if (currentProducts.length === 0) {
+          updateLoadingItem('search-products', 'No products found with valid URLs', 'error');
+          throw new Error('No products found with valid URLs. Try a different search term.');
+        }
+
+        updateLoadingItem('search-products', `Found ${searchData.count} products with valid URLs`, 'success');
 
         // Step 2: Show extraction starting
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -921,11 +953,17 @@
       }
     }
 
-    // Back button
+    // Back button (New Search)
     document.getElementById('back-btn').addEventListener('click', () => {
       document.getElementById('query-input').value = '';
       currentProducts = [];
       currentQuery = '';
+      // Clear sessionStorage for fresh search
+      sessionStorage.removeItem('searchQuery');
+      sessionStorage.removeItem('extractionResults');
+      sessionStorage.removeItem('seoKeywords');
+      sessionStorage.removeItem('entityAnalysisResult');
+      sessionStorage.removeItem('generatedDescription');
       showPage(1);
     });
 

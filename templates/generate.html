@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fluxer Atelier - SEO Description Generator</title>
+  <title>Inlined - SEO Description Generator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
@@ -470,13 +470,14 @@
   <header>
     <nav class="nav">
       <a href="/" class="logo">
-        <span class="logo-mark"></span>
-        <span>Fluxer Atelier</span>
+        <img src="/static/inlined-logo.png" alt="Inlined" style="height: 34px; width: auto; border-radius: 8px;">
+        <span>Inlined</span>
       </a>
       <div class="nav-links">
-        <a href="/" class="nav-link">Extraction</a>
-        <a href="/seo" class="nav-link">SEO Analysis</a>
-        <a href="/generate" class="nav-link active">Generator</a>
+        <a href="/" class="nav-link">Extract</a>
+        <a href="/seo" class="nav-link">TF-IDF</a>
+        <a href="/entities" class="nav-link">Entities</a>
+        <a href="/generate" class="nav-link active">Generate</a>
       </div>
     </nav>
   </header>
@@ -602,6 +603,10 @@
       const storedResults = sessionStorage.getItem('extractionResults');
       // Get SEO keywords
       const storedKeywords = sessionStorage.getItem('seoKeywords');
+      // Get search query for context
+      const storedQuery = sessionStorage.getItem('searchQuery');
+      // Check for previously generated description
+      const storedDescription = sessionStorage.getItem('generatedDescription');
 
       let hasData = false;
 
@@ -639,6 +644,19 @@
         generateBtn.disabled = false;
         document.getElementById('page-subtitle').textContent =
           `Ready to generate a single SEO description from ${extractionResults.length} products using ${seoKeywords.length} keywords.`;
+
+        // Restore previously generated description if available
+        if (storedDescription) {
+          try {
+            generatedDescription = JSON.parse(storedDescription);
+            renderDescription();
+            exportTxtBtn.disabled = false;
+            exportJsonBtn.disabled = false;
+            document.getElementById('stat-words').textContent = generatedDescription.word_count;
+          } catch (e) {
+            console.error('Error parsing stored description:', e);
+          }
+        }
       }
     });
 
@@ -676,6 +694,9 @@
     generateBtn.addEventListener('click', async () => {
       if (extractionResults.length === 0) return;
 
+      // Get the search query for better context
+      const searchQuery = sessionStorage.getItem('searchQuery') || '';
+
       generateBtn.disabled = true;
       emptyState.classList.add('hidden');
       descriptionCard.classList.add('hidden');
@@ -689,6 +710,7 @@
           body: JSON.stringify({
             products: extractionResults,
             keywords: seoKeywords,
+            search_query: searchQuery,  // Pass search query for generic naming
             config: {
               model: 'gpt-4o-mini',
               temperature: 0.7
@@ -704,6 +726,9 @@
 
         generatedDescription = data.result;
         renderDescription();
+
+        // Save to sessionStorage for persistence across tab navigation
+        sessionStorage.setItem('generatedDescription', JSON.stringify(generatedDescription));
 
         // Enable export buttons
         exportTxtBtn.disabled = false;

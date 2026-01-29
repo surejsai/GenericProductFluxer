@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fluxer Atelier - SEO Keyword Analysis</title>
+  <title>Inlined - SEO Keyword Analysis</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
@@ -480,13 +480,14 @@
   <header>
     <nav class="nav">
       <a href="/" class="logo">
-        <span class="logo-mark"></span>
-        <span>Fluxer Atelier</span>
+        <img src="/static/inlined-logo.png" alt="Inlined" style="height: 34px; width: auto; border-radius: 8px;">
+        <span>Inlined</span>
       </a>
       <div class="nav-links">
-        <a href="/" class="nav-link">Extraction</a>
-        <a href="/seo" class="nav-link active">SEO Analysis</a>
-        <a href="/generate" class="nav-link">Generator</a>
+        <a href="/" class="nav-link">Extract</a>
+        <a href="/seo" class="nav-link active">TF-IDF</a>
+        <a href="/entities" class="nav-link">Entities</a>
+        <a href="/generate" class="nav-link">Generate</a>
       </div>
     </nav>
   </header>
@@ -656,6 +657,9 @@
 
         // Update state
         allPhrases = data.analysis.phrases;
+
+        // Store in sessionStorage for Entities page
+        sessionStorage.setItem('seoKeywords', JSON.stringify(allPhrases));
 
         // Update stats
         updateStats(data.analysis.statistics);

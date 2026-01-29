@@ -12,6 +12,7 @@ from .spacy_extractor import SpacyExtractor
 from .keyword_merger import KeywordMerger
 from .seo_analyzer import SEOAnalyzer
 from .description_generator import DescriptionGenerator, GeneratedDescription
+from .entity_extractor import EntityExtractor
 
 __all__ = [
     'TextCleaner',
@@ -21,4 +22,5 @@ __all__ = [
     'SEOAnalyzer',
     'DescriptionGenerator',
     'GeneratedDescription',
+    'EntityExtractor',
 ]

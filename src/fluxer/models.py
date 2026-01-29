@@ -4,7 +4,7 @@ Data models for Fluxer product extraction.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 
 @dataclass(slots=True)
@@ -167,4 +167,191 @@ class AggregatedProducts:
                 for query, products in self.by_query.items()
             },
             "total_count": self.total_count,
+        }
+
+# ============================================================================
+# ENTITY EXTRACTION DATA MODELS
+# ============================================================================
+
+@dataclass
+class SupportingEntity:
+    """A supporting entity that clarifies the primary product."""
+    name: str
+    entity_type: str  # material, standard, environment, care
+    why_it_matters: str
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "name": self.name,
+            "type": self.entity_type,
+            "why_it_matters": self.why_it_matters,
+        }
+
+
+@dataclass
+class PlacementRecommendation:
+    """Recommendation for where to place an entity on a product page."""
+    entity_name: str
+    entity_type: str
+    recommended_sections: List[str]  # e.g., ['specs_table', 'care_instructions']
+    reasoning: str
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "entity_name": self.entity_name,
+            "entity_type": self.entity_type,
+            "recommended_sections": self.recommended_sections,
+            "reasoning": self.reasoning,
+        }
+
+
+@dataclass
+class EntityExtractionResult:
+    """Complete entity extraction results for a product."""
+    product_id: str
+    product_name: str
+    primary_entity_path: str
+    supporting_entities: List[SupportingEntity] = field(default_factory=list)
+    placement_map: List[PlacementRecommendation] = field(default_factory=list)
+    noise_terms: List[str] = field(default_factory=list)
+    grouped_terms: Dict[str, List[str]] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "product_id": self.product_id,
+            "product_name": self.product_name,
+            "primary_entity_path": self.primary_entity_path,
+            "supporting_entities": [e.to_dict() for e in self.supporting_entities],
+            "placement_map": [p.to_dict() for p in self.placement_map],
+            "noise_terms": self.noise_terms,
+            "grouped_terms": self.grouped_terms,
+        }
+
+
+# ============================================================================
+# HYBRID ENTITY EXTRACTION DATA MODELS (Rules + LLM)
+# ============================================================================
+
+@dataclass
+class EntityItem:
+    """
+    Individual entity with full provenance tracking.
+
+    Attributes:
+        name: Entity name (e.g., "Stainless Steel", "1200mm")
+        entity_type: Type classification (material, dimension, standard, etc.)
+        evidence: Text snippet supporting this entity
+        source: Extraction source ("rules" or "llm")
+        value: Numeric value if applicable
+        unit: Unit of measurement if applicable
+        why_it_matters: Explanation of entity significance
+    """
+    name: str
+    entity_type: str
+    evidence: str
+    source: str  # "rules" or "llm"
+    value: Optional[str] = None
+    unit: Optional[str] = None
+    why_it_matters: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "name": self.name,
+            "type": self.entity_type,
+            "evidence": self.evidence,
+            "source": self.source,
+            "value": self.value,
+            "unit": self.unit,
+            "why_it_matters": self.why_it_matters,
+        }
+
+
+@dataclass
+class Conflict:
+    """
+    Conflict between rules and LLM extraction.
+
+    Represents a case where rules and LLM produced different values
+    for the same entity type.
+    """
+    entity_type: str
+    rule_value: str
+    llm_value: str
+    resolution: str  # "prefer_rules", "prefer_llm", "manual_review"
+    reason: str
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "entity_type": self.entity_type,
+            "rule_value": self.rule_value,
+            "llm_value": self.llm_value,
+            "resolution": self.resolution,
+            "reason": self.reason,
+        }
+
+
+@dataclass
+class AuditInfo:
+    """
+    Audit trail for entity extraction.
+
+    Tracks what happened during extraction for debugging
+    and quality analysis.
+    """
+    missing_types: List[str] = field(default_factory=list)
+    conflicts: List[Conflict] = field(default_factory=list)
+    notes: List[str] = field(default_factory=list)
+    llm_invoked: bool = False
+    llm_reason: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "missing_types": self.missing_types,
+            "conflicts": [c.to_dict() for c in self.conflicts],
+            "notes": self.notes,
+            "llm_invoked": self.llm_invoked,
+            "llm_reason": self.llm_reason,
+        }
+
+
+@dataclass
+class HybridEntityExtractionResult:
+    """
+    Enhanced entity extraction result with rules + LLM.
+
+    Provides complete audit trail showing what came from rules
+    vs LLM, any conflicts detected, and final merged results.
+    """
+    product_id: str
+    product_name: str
+    primary_entity_path: str
+    grouped_terms: Dict[str, List[str]] = field(default_factory=dict)
+    rule_entities: List[EntityItem] = field(default_factory=list)
+    llm_entities: List[EntityItem] = field(default_factory=list)
+    supporting_entities: List[EntityItem] = field(default_factory=list)
+    placement_map: List[PlacementRecommendation] = field(default_factory=list)
+    noise_terms: List[str] = field(default_factory=list)
+    confidence: float = 0.0
+    audit: AuditInfo = field(default_factory=AuditInfo)
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "product_id": self.product_id,
+            "product_name": self.product_name,
+            "primary_entity_path": self.primary_entity_path,
+            "grouped_terms": self.grouped_terms,
+            "rule_entities": [e.to_dict() for e in self.rule_entities],
+            "llm_entities": [e.to_dict() for e in self.llm_entities],
+            "supporting_entities": [e.to_dict() for e in self.supporting_entities],
+            "placement_map": [p.to_dict() for p in self.placement_map],
+            "noise_terms": self.noise_terms,
+            "confidence": self.confidence,
+            "audit": self.audit.to_dict(),
         }

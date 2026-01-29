@@ -34,6 +34,14 @@ class Config:
     # Number of parallel workers for batch extraction (reduce for memory-constrained environments)
     EXTRACTION_WORKERS: int = int(os.getenv("EXTRACTION_WORKERS", "2"))
 
+    # Entity extraction configuration
+    # OpenAI model for LLM-based entity extraction (gap filling)
+    ENTITY_LLM_MODEL: str = os.getenv("ENTITY_LLM_MODEL", "gpt-4o-mini")
+    # Confidence threshold below which LLM is invoked (0.0-1.0)
+    ENTITY_CONFIDENCE_THRESHOLD: float = float(os.getenv("ENTITY_CONFIDENCE_THRESHOLD", "0.7"))
+    # Enable/disable LLM extraction entirely
+    ENTITY_LLM_ENABLED: bool = os.getenv("ENTITY_LLM_ENABLED", "true").lower() == "true"
+
     # Flask settings
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
     FLASK_DEBUG: bool = os.getenv("FLASK_DEBUG", "True").lower() == "true"
@@ -112,6 +120,9 @@ class Config:
             "flask_port": cls.FLASK_PORT,
             "extractor_type": cls.EXTRACTOR_TYPE,
             "extraction_workers": cls.EXTRACTION_WORKERS,
+            "entity_llm_model": cls.ENTITY_LLM_MODEL,
+            "entity_confidence_threshold": cls.ENTITY_CONFIDENCE_THRESHOLD,
+            "entity_llm_enabled": cls.ENTITY_LLM_ENABLED,
             "serp_api_configured": cls.SERP_API_KEY is not None,
             "scraper_api_configured": cls.SCRAPER_API_KEY is not None,
             "firecrawl_api_configured": cls.FIRECRAWL_API_KEY is not None,

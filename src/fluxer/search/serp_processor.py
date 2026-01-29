@@ -1,6 +1,7 @@
 """Utilities for fetching immersive product results from the SERP API."""
 from __future__ import annotations
 
+import logging
 import os
 import random
 import re
@@ -8,6 +9,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Tuple
 from dotenv import load_dotenv
 from serpapi import GoogleSearch
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -57,6 +60,18 @@ class SerpProcessor:
 
             immersive_products: List[dict] = results.get("immersive_products") or []
 
+            # Log available result keys for debugging
+            result_keys = list(results.keys())
+            logger.info(f"SERP API response keys for '{query}': {result_keys}")
+            logger.info(f"Found {len(immersive_products)} immersive_products for '{query}'")
+
+            # If no immersive_products, try shopping_results as fallback
+            if not immersive_products:
+                shopping_results = results.get("shopping_results") or []
+                logger.info(f"Trying shopping_results fallback: {len(shopping_results)} found")
+                if shopping_results:
+                    immersive_products = shopping_results
+
             per_query: Dict[str, ProductHit] = {}
             for item in immersive_products[:limit]:
                 title = item.get("title")
@@ -66,11 +81,12 @@ class SerpProcessor:
                     title=title,
                     price=item.get("price"),
                     source=item.get("source"),
-                    link=None,
+                    link=item.get("link"),  # Some results may already have links
                 )
 
             query_key = _make_query_key(query, digits=5)
             aggregated.by_query[query_key] = per_query
+            logger.info(f"Stored {len(per_query)} products for query '{query}'")
 
         return aggregated
 
@@ -138,9 +154,17 @@ class SerpProcessor:
                 if organic:
                     # SerpApi uses "link" for the URL on organic results
                     first_link = organic[0].get("link")
+                    logger.debug(f"Found organic link for '{ttl[:30]}...': {first_link[:50] if first_link else 'None'}...")
+                else:
+                    logger.warning(f"No organic results found for query: '{q[:50]}...'")
 
                 cache[cache_key] = first_link
                 hit.link = first_link
+
+        # Log enrichment summary
+        total_hits = sum(len(hits) for hits in aggregated.by_query.values())
+        hits_with_links = sum(1 for hits in aggregated.by_query.values() for h in hits.values() if h.link)
+        logger.info(f"Enrichment complete: {hits_with_links}/{total_hits} products have links")
 
         return aggregated
 
