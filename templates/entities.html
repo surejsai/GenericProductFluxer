@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inlined - Entity Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0c12;
+      --panel: rgba(20, 24, 32, 0.92);
+      --card: rgba(26, 30, 40, 0.95);
+      --accent: #d4af5a;
+      --accent-2: #a8b3d8;
+      --text: #e8eaf0;
+      --muted: #9ca3af;
+      --border: rgba(212, 175, 90, 0.18);
+      --shadow: 0 24px 56px rgba(0, 0, 0, 0.6);
+      --success: #52c77a;
+      --error: #ef4444;
+      --material: #7c9aed;
+      --standard: #ed7c7c;
+      --environment: #7ced8f;
+      --care: #eda67c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Space Grotesk", "Manrope", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(240px at 12% 18%, rgba(212, 175, 90, 0.12), transparent),
+        radial-gradient(360px at 86% 12%, rgba(168, 179, 216, 0.15), transparent),
+        radial-gradient(320px at 40% 90%, rgba(212, 175, 90, 0.08), transparent),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      background-attachment: fixed;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(12px);
+      background: linear-gradient(180deg, rgba(10, 12, 18, 0.95), rgba(10, 12, 18, 0.7));
+      padding: 18px clamp(18px, 3vw, 36px);
+      border-bottom: 1px solid rgba(212, 175, 90, 0.2);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      justify-content: space-between;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 12px;
+    }
+
+    .nav-link {
+      padding: 8px 16px;
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--text);
+      background: rgba(212, 175, 90, 0.1);
+    }
+
+    .nav-link.active {
+      color: var(--accent);
+      background: rgba(212, 175, 90, 0.15);
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: 0.4px;
+      font-weight: 600;
+      font-family: "Playfair Display", "Space Grotesk", serif;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .logo-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      position: relative;
+      box-shadow: 0 10px 30px rgba(199, 160, 82, 0.35);
+      overflow: hidden;
+    }
+
+    .logo-mark::after {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border-radius: 8px;
+      border: 2px solid rgba(248, 246, 241, 0.6);
+    }
+
+    main {
+      flex: 1;
+      padding: clamp(20px, 3vw, 40px);
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .page-title {
+      margin: 0 0 8px;
+      font-size: clamp(26px, 4vw, 36px);
+      font-family: "Playfair Display", serif;
+    }
+
+    .page-subtitle {
+      color: var(--muted);
+      margin: 0 0 24px;
+      font-size: 15px;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+
+    .empty-state h3 {
+      margin: 0 0 12px;
+      font-family: "Playfair Display", serif;
+      color: var(--accent);
+    }
+
+    .empty-state p {
+      color: var(--muted);
+      margin: 0;
+    }
+
+    /* Primary Entity Display */
+    .primary-entity-card {
+      background: linear-gradient(135deg, rgba(212, 175, 90, 0.15), rgba(168, 179, 216, 0.1));
+      border: 2px solid var(--accent);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .primary-entity-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .primary-entity-path {
+      font-size: 28px;
+      font-weight: 600;
+      font-family: "Playfair Display", serif;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .path-separator {
+      color: var(--muted);
+      font-size: 20px;
+    }
+
+    .product-name-badge {
+      background: rgba(212, 175, 90, 0.2);
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--text);
+      margin-top: 12px;
+      display: inline-block;
+    }
+
+    /* Section Cards */
+    .section-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      font-family: "Playfair Display", serif;
+      margin: 0 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title .icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    /* Grouped Terms */
+    .terms-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .term-bucket {
+      background: rgba(15, 18, 26, 0.6);
+      border: 1px solid rgba(212, 175, 90, 0.12);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .bucket-header {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(212, 175, 90, 0.15);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .bucket-count {
+      background: rgba(212, 175, 90, 0.2);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    .term-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .term-tag {
+      background: rgba(212, 175, 90, 0.1);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text);
+      border: 1px solid rgba(212, 175, 90, 0.15);
+    }
+
+    /* Supporting Entities */
+    .entities-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .entity-card {
+      background: rgba(15, 18, 26, 0.6);
+      border-radius: 12px;
+      padding: 16px;
+      border-left: 4px solid var(--accent);
+    }
+
+    .entity-card.material { border-left-color: var(--material); }
+    .entity-card.standard { border-left-color: var(--standard); }
+    .entity-card.environment { border-left-color: var(--environment); }
+    .entity-card.care { border-left-color: var(--care); }
+
+    .entity-name {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .entity-type {
+      display: inline-block;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+
+    .entity-type.material { background: rgba(124, 154, 237, 0.2); color: var(--material); }
+    .entity-type.standard { background: rgba(237, 124, 124, 0.2); color: var(--standard); }
+    .entity-type.environment { background: rgba(124, 237, 143, 0.2); color: var(--environment); }
+    .entity-type.care { background: rgba(237, 166, 124, 0.2); color: var(--care); }
+
+    .entity-why {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* Placement Guide */
+    .placement-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .placement-item {
+      background: rgba(15, 18, 26, 0.6);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .placement-entity {
+      font-weight: 500;
+    }
+
+    .placement-sections {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .section-badge {
+      background: rgba(82, 199, 122, 0.15);
+      color: var(--success);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      text-transform: capitalize;
+    }
+
+    .placement-reasoning {
+      grid-column: 1 / -1;
+      font-size: 12px;
+      color: var(--muted);
+      padding-top: 8px;
+      border-top: 1px solid rgba(212, 175, 90, 0.1);
+    }
+
+    /* Noise Terms (Collapsible) */
+    .noise-section {
+      margin-top: 24px;
+    }
+
+    .noise-toggle {
+      background: rgba(15, 18, 26, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .noise-toggle:hover {
+      border-color: rgba(212, 175, 90, 0.3);
+      color: var(--text);
+    }
+
+    .noise-toggle .arrow {
+      transition: transform 0.2s ease;
+    }
+
+    .noise-toggle.open .arrow {
+      transform: rotate(180deg);
+    }
+
+    .noise-content {
+      display: none;
+      padding: 16px;
+      background: rgba(15, 18, 26, 0.4);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+    }
+
+    .noise-content.show {
+      display: block;
+    }
+
+    .noise-terms {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .noise-tag {
+      background: rgba(156, 163, 175, 0.1);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Loading State */
+    .loading-state {
+      text-align: center;
+      padding: 40px;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(212, 175, 90, 0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Action Buttons */
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .action-btn:hover {
+      border-color: var(--accent);
+      background: rgba(212, 175, 90, 0.1);
+    }
+
+    .action-btn.primary {
+      background: linear-gradient(135deg, var(--accent), #c9a44e);
+      color: #0a0c12;
+      border: none;
+      font-weight: 600;
+    }
+
+    .action-btn.primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(212, 175, 90, 0.3);
+    }
+
+    .action-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Confidence Badge */
+    .confidence-container {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      background: rgba(20, 24, 32, 0.6);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .confidence-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .confidence-label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .confidence-value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .confidence-value.high { color: var(--success); }
+    .confidence-value.medium { color: var(--accent); }
+    .confidence-value.low { color: var(--error); }
+
+    .confidence-bar {
+      flex: 1;
+      height: 8px;
+      background: rgba(156, 163, 175, 0.2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .confidence-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .confidence-fill.high { background: var(--success); }
+    .confidence-fill.medium { background: var(--accent); }
+    .confidence-fill.low { background: var(--error); }
+
+    .llm-badge {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .llm-badge.invoked {
+      background: rgba(124, 154, 237, 0.2);
+      color: var(--material);
+    }
+
+    .llm-badge.skipped {
+      background: rgba(156, 163, 175, 0.15);
+      color: var(--muted);
+    }
+
+    /* Debug Section */
+    .debug-section {
+      margin-top: 24px;
+    }
+
+    .debug-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      background: rgba(124, 154, 237, 0.1);
+      border: 1px solid rgba(124, 154, 237, 0.3);
+      border-radius: 10px;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .debug-toggle:hover {
+      background: rgba(124, 154, 237, 0.15);
+    }
+
+    .debug-toggle.open {
+      border-radius: 10px 10px 0 0;
+    }
+
+    .debug-content {
+      display: none;
+      padding: 20px;
+      background: rgba(15, 18, 26, 0.5);
+      border: 1px solid rgba(124, 154, 237, 0.3);
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+    }
+
+    .debug-content.show {
+      display: block;
+    }
+
+    .debug-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .debug-grid { grid-template-columns: 1fr; }
+    }
+
+    .debug-column h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 0 0 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .debug-column h3 .count {
+      background: rgba(212, 175, 90, 0.2);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+    }
+
+    .debug-entity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .debug-entity {
+      padding: 10px 12px;
+      background: rgba(26, 30, 40, 0.8);
+      border-radius: 8px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .debug-entity.rules { border-left-color: var(--success); }
+    .debug-entity.llm { border-left-color: var(--material); }
+
+    .debug-entity-name {
+      font-weight: 500;
+      font-size: 13px;
+    }
+
+    .debug-entity-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .debug-entity-evidence {
+      font-size: 11px;
+      color: var(--muted);
+      font-style: italic;
+      margin-top: 4px;
+      padding-left: 8px;
+      border-left: 2px solid rgba(156, 163, 175, 0.3);
+    }
+
+    /* Audit Section */
+    .audit-section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(124, 154, 237, 0.2);
+    }
+
+    .audit-section h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin: 0 0 10px 0;
+    }
+
+    .audit-notes {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .audit-note {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 6px 10px;
+      background: rgba(156, 163, 175, 0.08);
+      border-radius: 6px;
+    }
+
+    .audit-note::before {
+      content: "→ ";
+      color: var(--accent);
+    }
+
+    /* Conflicts Section */
+    .conflicts-section {
+      margin-top: 16px;
+      padding: 12px;
+      background: rgba(239, 68, 68, 0.1);
+      border-radius: 8px;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .conflicts-section h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--error);
+      margin: 0 0 10px 0;
+    }
+
+    .conflict-item {
+      font-size: 12px;
+      padding: 8px;
+      background: rgba(239, 68, 68, 0.05);
+      border-radius: 6px;
+      margin-bottom: 6px;
+    }
+
+    .conflict-item:last-child {
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="nav">
+      <a href="/" class="logo">
+        <img src="/static/inlined-logo.png" alt="Inlined" style="height: 34px; width: auto; border-radius: 8px;">
+        Inlined
+      </a>
+      <div class="nav-links">
+        <a href="/" class="nav-link">Extract</a>
+        <a href="/seo" class="nav-link">TF-IDF</a>
+        <a href="/entities" class="nav-link active">Entities</a>
+        <a href="/generate" class="nav-link">Generate</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <h1 class="page-title">Entity Analysis</h1>
+    <p class="page-subtitle">Primary and supporting entities derived from TF-IDF terms for structured product knowledge.</p>
+
+    <!-- Action Bar -->
+    <div class="action-bar">
+      <button class="action-btn primary" id="extractBtn" onclick="extractEntities()">
+        <span>&#x2728;</span> Extract Entities from SEO Data
+      </button>
+      <button class="action-btn" id="exportBtn" onclick="exportEntities()" disabled>
+        <span>&#x1F4E5;</span> Export JSON
+      </button>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="loading-state" style="display: none;">
+      <div class="loading-spinner"></div>
+      <p style="color: var(--muted);">Extracting entities from TF-IDF data...</p>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="empty-state">
+      <h3>No Entity Data Yet</h3>
+      <p>Run a product search and TF-IDF analysis first, then click "Extract Entities" to derive the product entity structure.</p>
+    </div>
+
+    <!-- Results Container -->
+    <div id="resultsContainer" style="display: none;">
+
+      <!-- Confidence Bar -->
+      <div class="confidence-container" id="confidenceContainer">
+        <div class="confidence-badge">
+          <span class="confidence-label">Extraction Confidence:</span>
+          <span class="confidence-value" id="confidenceValue">--</span>
+        </div>
+        <div class="confidence-bar">
+          <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
+        </div>
+        <span class="llm-badge skipped" id="llmBadge">Rules Only</span>
+      </div>
+
+      <!-- Primary Entity -->
+      <div class="primary-entity-card">
+        <div class="primary-entity-label">Primary Product Entity</div>
+        <div class="primary-entity-path" id="primaryEntityPath">
+          <!-- Filled by JS -->
+        </div>
+        <div class="product-name-badge" id="productNameBadge"></div>
+      </div>
+
+      <!-- Grouped Terms -->
+      <div class="section-card">
+        <h2 class="section-title">
+          <span class="icon" style="background: rgba(212, 175, 90, 0.2);">&#x1F4CA;</span>
+          Grouped TF-IDF Terms
+        </h2>
+        <div class="terms-grid" id="termsGrid">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+      <!-- Supporting Entities -->
+      <div class="section-card">
+        <h2 class="section-title">
+          <span class="icon" style="background: rgba(168, 179, 216, 0.2);">&#x1F3F7;</span>
+          Supporting Entities
+        </h2>
+        <div class="entities-grid" id="entitiesGrid">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+      <!-- Placement Guide -->
+      <div class="section-card">
+        <h2 class="section-title">
+          <span class="icon" style="background: rgba(82, 199, 122, 0.2);">&#x1F4CD;</span>
+          PDP Placement Guide
+        </h2>
+        <div class="placement-list" id="placementList">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+      <!-- Noise Terms (Debug) -->
+      <div class="noise-section">
+        <button class="noise-toggle" id="noiseToggle" onclick="toggleNoise()">
+          <span>&#x26A0; Noise Terms (excluded from analysis)</span>
+          <span class="arrow">&#x25BC;</span>
+        </button>
+        <div class="noise-content" id="noiseContent">
+          <div class="noise-terms" id="noiseTerms">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Debug Section: Rules vs LLM -->
+      <div class="debug-section">
+        <button class="debug-toggle" id="debugToggle" onclick="toggleDebug()">
+          <span>&#x1F50D; Extraction Debug (Rules vs LLM)</span>
+          <span class="arrow">&#x25BC;</span>
+        </button>
+        <div class="debug-content" id="debugContent">
+          <div class="debug-grid">
+            <div class="debug-column">
+              <h3>&#x2705; Rules Extraction <span class="count" id="rulesCount">0</span></h3>
+              <div class="debug-entity-list" id="rulesEntities">
+                <!-- Filled by JS -->
+              </div>
+            </div>
+            <div class="debug-column">
+              <h3>&#x1F916; LLM Extraction <span class="count" id="llmCount">0</span></h3>
+              <div class="debug-entity-list" id="llmEntities">
+                <!-- Filled by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Conflicts -->
+          <div class="conflicts-section" id="conflictsSection" style="display: none;">
+            <h4>&#x26A0; Conflicts Detected</h4>
+            <div id="conflictsList">
+              <!-- Filled by JS -->
+            </div>
+          </div>
+
+          <!-- Audit Notes -->
+          <div class="audit-section">
+            <h4>Audit Trail</h4>
+            <div class="audit-notes" id="auditNotes">
+              <!-- Filled by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Store data globally for export
+    let entityData = null;
+    let seoData = null;
+
+    // Check for stored SEO data on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      const storedSeo = sessionStorage.getItem('seoKeywords');
+      const storedProducts = sessionStorage.getItem('extractionResults');
+
+      if (storedSeo) {
+        seoData = JSON.parse(storedSeo);
+      }
+
+      // Check if we have cached entity data
+      const storedEntities = sessionStorage.getItem('entityAnalysisResult');
+      if (storedEntities) {
+        entityData = JSON.parse(storedEntities);
+        displayResults(entityData);
+      }
+    });
+
+    async function extractEntities() {
+      // Get SEO data from session storage (stored as 'seoKeywords' by seo.html)
+      const storedSeo = sessionStorage.getItem('seoKeywords');
+      const storedProducts = sessionStorage.getItem('extractionResults');
+      const storedQuery = sessionStorage.getItem('searchQuery');
+
+      if (!storedSeo) {
+        alert('No TF-IDF data found. Please run SEO analysis first on the TF-IDF page.');
+        return;
+      }
+
+      // seoKeywords is stored as an array directly, not {phrases: [...]}
+      const phrases = JSON.parse(storedSeo);
+
+      if (phrases.length === 0) {
+        alert('No TF-IDF phrases found. Please run SEO analysis first.');
+        return;
+      }
+
+      // Get the search query - this provides crucial context for entity extraction
+      const searchQuery = storedQuery || '';
+
+      // Get product info if available
+      // Prefer the search query over extracted product names for generic results
+      let productName = searchQuery || 'Analyzed Product';
+      let productDescription = '';
+
+      if (storedProducts) {
+        const products = JSON.parse(storedProducts);
+        if (products.length > 0) {
+          // Use search query if available, otherwise use extracted product name
+          if (!searchQuery) {
+            productName = products[0].product_name || products[0].title || 'Analyzed Product';
+          }
+          productDescription = products[0].product_description || '';
+        }
+      }
+
+      // Show loading
+      document.getElementById('loadingState').style.display = 'block';
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('resultsContainer').style.display = 'none';
+      document.getElementById('extractBtn').disabled = true;
+
+      try {
+        // Call entity extraction API with search query for better context
+        const response = await fetch('/api/entities/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product_id: 'entity-analysis-' + Date.now(),
+            product_name: productName,
+            search_query: searchQuery,  // Pass the original search term for LLM context
+            tfidf_terms: phrases.map(p => ({
+              phrase: p.phrase,
+              tfidf_score: p.tfidf_score || p.importance_score || 0,
+              doc_freq: p.doc_freq || 1
+            })),
+            product_description: productDescription
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          entityData = result.entity_result;
+          // Store for later
+          sessionStorage.setItem('entityAnalysisResult', JSON.stringify(entityData));
+          displayResults(entityData);
+        } else {
+          throw new Error(result.message || 'Entity extraction failed');
+        }
+
+      } catch (error) {
+        console.error('Entity extraction error:', error);
+        alert('Error extracting entities: ' + error.message);
+        document.getElementById('emptyState').style.display = 'block';
+      } finally {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('extractBtn').disabled = false;
+      }
+    }
+
+    function displayResults(data) {
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('resultsContainer').style.display = 'block';
+      document.getElementById('exportBtn').disabled = false;
+
+      // Confidence display
+      const confidence = data.confidence || 0;
+      const confidencePercent = Math.round(confidence * 100);
+      const confidenceClass = confidence >= 0.7 ? 'high' : confidence >= 0.4 ? 'medium' : 'low';
+
+      document.getElementById('confidenceValue').textContent = confidencePercent + '%';
+      document.getElementById('confidenceValue').className = 'confidence-value ' + confidenceClass;
+      document.getElementById('confidenceFill').style.width = confidencePercent + '%';
+      document.getElementById('confidenceFill').className = 'confidence-fill ' + confidenceClass;
+
+      // LLM badge
+      const llmBadge = document.getElementById('llmBadge');
+      if (data.audit && data.audit.llm_invoked) {
+        llmBadge.textContent = 'LLM Used';
+        llmBadge.className = 'llm-badge invoked';
+        llmBadge.title = data.audit.llm_reason || 'LLM was invoked';
+      } else {
+        llmBadge.textContent = 'Rules Only';
+        llmBadge.className = 'llm-badge skipped';
+        llmBadge.title = 'LLM extraction was not needed';
+      }
+
+      // Primary Entity Path
+      const pathParts = data.primary_entity_path.split(' > ');
+      const pathHtml = pathParts.map((part, i) => {
+        if (i < pathParts.length - 1) {
+          return `<span>${part}</span><span class="path-separator">›</span>`;
+        }
+        return `<span>${part}</span>`;
+      }).join('');
+      document.getElementById('primaryEntityPath').innerHTML = pathHtml;
+      document.getElementById('productNameBadge').textContent = data.product_name;
+
+      // Grouped Terms
+      const termsGrid = document.getElementById('termsGrid');
+      termsGrid.innerHTML = '';
+
+      const bucketOrder = ['Core Attributes', 'Functional Terms', 'Usage Context', 'Compliance / Standards'];
+      const bucketIcons = {
+        'Core Attributes': '&#x1F3AF;',
+        'Functional Terms': '&#x2699;',
+        'Usage Context': '&#x1F3E0;',
+        'Compliance / Standards': '&#x2705;'
+      };
+
+      for (const bucket of bucketOrder) {
+        const terms = data.grouped_terms[bucket] || [];
+        if (terms.length === 0) continue;
+
+        const bucketHtml = `
+          <div class="term-bucket">
+            <div class="bucket-header">
+              <span>${bucketIcons[bucket] || ''}</span>
+              ${bucket}
+              <span class="bucket-count">${terms.length}</span>
+            </div>
+            <div class="term-list">
+              ${terms.slice(0, 15).map(t => `<span class="term-tag">${t}</span>`).join('')}
+              ${terms.length > 15 ? `<span class="term-tag" style="opacity: 0.6;">+${terms.length - 15} more</span>` : ''}
+            </div>
+          </div>
+        `;
+        termsGrid.innerHTML += bucketHtml;
+      }
+
+      // Supporting Entities
+      const entitiesGrid = document.getElementById('entitiesGrid');
+      entitiesGrid.innerHTML = '';
+
+      if (data.supporting_entities.length === 0) {
+        entitiesGrid.innerHTML = '<p style="color: var(--muted); grid-column: 1/-1;">No supporting entities identified.</p>';
+      } else {
+        for (const entity of data.supporting_entities) {
+          const entityHtml = `
+            <div class="entity-card ${entity.type}">
+              <div class="entity-name">${entity.name}</div>
+              <span class="entity-type ${entity.type}">${entity.type}</span>
+              <div class="entity-why">${entity.why_it_matters}</div>
+            </div>
+          `;
+          entitiesGrid.innerHTML += entityHtml;
+        }
+      }
+
+      // Placement Guide
+      const placementList = document.getElementById('placementList');
+      placementList.innerHTML = '';
+
+      if (data.placement_map.length === 0) {
+        placementList.innerHTML = '<p style="color: var(--muted);">No placement recommendations available.</p>';
+      } else {
+        for (const placement of data.placement_map) {
+          const sectionsHtml = placement.recommended_sections
+            .map(s => `<span class="section-badge">${s.replace(/_/g, ' ')}</span>`)
+            .join('');
+
+          const placementHtml = `
+            <div class="placement-item">
+              <div class="placement-entity">${placement.entity_name}</div>
+              <div class="placement-sections">${sectionsHtml}</div>
+              <div class="placement-reasoning">${placement.reasoning}</div>
+            </div>
+          `;
+          placementList.innerHTML += placementHtml;
+        }
+      }
+
+      // Noise Terms
+      const noiseTerms = document.getElementById('noiseTerms');
+      noiseTerms.innerHTML = '';
+
+      if (data.noise_terms && data.noise_terms.length > 0) {
+        for (const term of data.noise_terms.slice(0, 50)) {
+          noiseTerms.innerHTML += `<span class="noise-tag">${term}</span>`;
+        }
+        if (data.noise_terms.length > 50) {
+          noiseTerms.innerHTML += `<span class="noise-tag" style="opacity: 0.6;">+${data.noise_terms.length - 50} more</span>`;
+        }
+      } else {
+        noiseTerms.innerHTML = '<span style="color: var(--muted);">No noise terms identified.</span>';
+      }
+
+      // Debug Section: Rules vs LLM Entities
+      const ruleEntities = data.rule_entities || [];
+      const llmEntities = data.llm_entities || [];
+
+      // Update counts
+      document.getElementById('rulesCount').textContent = ruleEntities.length;
+      document.getElementById('llmCount').textContent = llmEntities.length;
+
+      // Rules entities
+      const rulesContainer = document.getElementById('rulesEntities');
+      rulesContainer.innerHTML = '';
+      if (ruleEntities.length === 0) {
+        rulesContainer.innerHTML = '<p style="color: var(--muted); font-size: 12px;">No entities from rules.</p>';
+      } else {
+        for (const entity of ruleEntities) {
+          rulesContainer.innerHTML += `
+            <div class="debug-entity rules">
+              <div class="debug-entity-name">${entity.name}</div>
+              <div class="debug-entity-meta">${entity.type}${entity.value ? ` • ${entity.value}${entity.unit || ''}` : ''}</div>
+              ${entity.evidence ? `<div class="debug-entity-evidence">"${entity.evidence.substring(0, 100)}${entity.evidence.length > 100 ? '...' : ''}"</div>` : ''}
+            </div>
+          `;
+        }
+      }
+
+      // LLM entities
+      const llmContainer = document.getElementById('llmEntities');
+      llmContainer.innerHTML = '';
+      if (llmEntities.length === 0) {
+        llmContainer.innerHTML = '<p style="color: var(--muted); font-size: 12px;">No entities from LLM (not invoked or no results).</p>';
+      } else {
+        for (const entity of llmEntities) {
+          llmContainer.innerHTML += `
+            <div class="debug-entity llm">
+              <div class="debug-entity-name">${entity.name}</div>
+              <div class="debug-entity-meta">${entity.type}${entity.value ? ` • ${entity.value}${entity.unit || ''}` : ''}</div>
+              ${entity.evidence ? `<div class="debug-entity-evidence">"${entity.evidence.substring(0, 100)}${entity.evidence.length > 100 ? '...' : ''}"</div>` : ''}
+            </div>
+          `;
+        }
+      }
+
+      // Conflicts
+      const conflictsSection = document.getElementById('conflictsSection');
+      const conflictsList = document.getElementById('conflictsList');
+      const conflicts = data.audit?.conflicts || [];
+
+      if (conflicts.length > 0) {
+        conflictsSection.style.display = 'block';
+        conflictsList.innerHTML = '';
+        for (const conflict of conflicts) {
+          conflictsList.innerHTML += `
+            <div class="conflict-item">
+              <strong>${conflict.entity_type}:</strong> Rules="${conflict.rule_value}" vs LLM="${conflict.llm_value}"
+              <br><small>Resolution: ${conflict.resolution} - ${conflict.reason}</small>
+            </div>
+          `;
+        }
+      } else {
+        conflictsSection.style.display = 'none';
+      }
+
+      // Audit notes
+      const auditNotes = document.getElementById('auditNotes');
+      auditNotes.innerHTML = '';
+      const notes = data.audit?.notes || [];
+
+      if (notes.length > 0) {
+        for (const note of notes) {
+          auditNotes.innerHTML += `<div class="audit-note">${note}</div>`;
+        }
+      } else {
+        auditNotes.innerHTML = '<div class="audit-note">No audit notes available.</div>';
+      }
+
+      // Show missing types if any
+      const missingTypes = data.audit?.missing_types || [];
+      if (missingTypes.length > 0) {
+        auditNotes.innerHTML += `<div class="audit-note">Missing entity types: ${missingTypes.join(', ')}</div>`;
+      }
+    }
+
+    function toggleNoise() {
+      const toggle = document.getElementById('noiseToggle');
+      const content = document.getElementById('noiseContent');
+      toggle.classList.toggle('open');
+      content.classList.toggle('show');
+    }
+
+    function toggleDebug() {
+      const toggle = document.getElementById('debugToggle');
+      const content = document.getElementById('debugContent');
+      toggle.classList.toggle('open');
+      content.classList.toggle('show');
+    }
+
+    function exportEntities() {
+      if (!entityData) {
+        alert('No entity data to export.');
+        return;
+      }
+
+      const blob = new Blob([JSON.stringify(entityData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `entity-analysis-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
