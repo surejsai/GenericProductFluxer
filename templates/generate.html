@@ -326,11 +326,6 @@
       color: var(--success);
     }
 
-    .stat-tag.model {
-      background: rgba(168, 179, 216, 0.1);
-      color: var(--accent-2);
-    }
-
     .keywords-section {
       margin-top: 20px;
       padding-top: 20px;
@@ -358,6 +353,52 @@
       background: rgba(168, 179, 216, 0.12);
       color: var(--accent-2);
     }
+
+    /* Entities Section */
+    .entities-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(212, 175, 90, 0.1);
+    }
+
+    .primary-entity {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      background: linear-gradient(135deg, rgba(212, 175, 90, 0.15), rgba(212, 175, 90, 0.05));
+      border: 1px solid rgba(212, 175, 90, 0.3);
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .entities-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .entity-tag {
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      background: rgba(82, 199, 122, 0.1);
+      color: var(--success);
+      border: 1px solid rgba(82, 199, 122, 0.2);
+    }
+
+    .entity-tag.material { background: rgba(139, 92, 246, 0.1); color: #a78bfa; border-color: rgba(139, 92, 246, 0.2); }
+    .entity-tag.dimension { background: rgba(59, 130, 246, 0.1); color: #60a5fa; border-color: rgba(59, 130, 246, 0.2); }
+    .entity-tag.finish { background: rgba(236, 72, 153, 0.1); color: #f472b6; border-color: rgba(236, 72, 153, 0.2); }
+    .entity-tag.rating { background: rgba(251, 191, 36, 0.1); color: #fbbf24; border-color: rgba(251, 191, 36, 0.2); }
+    .entity-tag.weight { background: rgba(20, 184, 166, 0.1); color: #2dd4bf; border-color: rgba(20, 184, 166, 0.2); }
+    .entity-tag.capacity { background: rgba(249, 115, 22, 0.1); color: #fb923c; border-color: rgba(249, 115, 22, 0.2); }
+    .entity-tag.environment { background: rgba(34, 197, 94, 0.1); color: #4ade80; border-color: rgba(34, 197, 94, 0.2); }
+    .entity-tag.standard { background: rgba(99, 102, 241, 0.1); color: #818cf8; border-color: rgba(99, 102, 241, 0.2); }
+    .entity-tag.certification { background: rgba(168, 85, 247, 0.1); color: #c084fc; border-color: rgba(168, 85, 247, 0.2); }
 
     /* Loading & Empty States */
     .loading-state,
@@ -464,6 +505,26 @@
       border: 1px solid rgba(239, 68, 68, 0.2);
       border-radius: 16px;
     }
+
+    .entities-warning {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+      background: rgba(251, 191, 36, 0.1);
+      border-bottom: 1px solid rgba(251, 191, 36, 0.2);
+      color: #fbbf24;
+      font-size: 13px;
+    }
+
+    .entities-warning a {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+
+    .entities-warning a:hover {
+      color: var(--text);
+    }
   </style>
 </head>
 <body>
@@ -564,17 +625,31 @@
           </button>
         </div>
       </div>
+      <!-- Warning banner when entities not used -->
+      <div class="entities-warning hidden" id="entities-warning">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>Description generated using TF-IDF keywords only. Run <a href="/entities">Entity Analysis</a> first for better results.</span>
+      </div>
       <div class="description-body">
         <p class="description-text" id="result-description"></p>
 
         <div class="description-stats">
           <span class="stat-tag words" id="result-words">0 words</span>
-          <span class="stat-tag model" id="result-model">gpt-4o-mini</span>
         </div>
 
         <div class="keywords-section">
           <div class="keywords-label">Keywords Used</div>
           <div class="keywords-list" id="result-keywords"></div>
+        </div>
+
+        <div class="entities-section hidden" id="entities-section">
+          <div class="keywords-label">Entities Used</div>
+          <div class="primary-entity" id="result-primary-entity"></div>
+          <div class="entities-list" id="result-entities"></div>
         </div>
       </div>
     </div>
@@ -594,6 +669,7 @@
     // State
     let extractionResults = [];
     let seoKeywords = [];
+    let entityData = null;
     let generatedDescription = null;
 
     // DOM elements
@@ -641,6 +717,16 @@
           }
         } catch (e) {
           console.error('Error parsing SEO keywords:', e);
+        }
+      }
+
+      // Get entity analysis results
+      const storedEntities = sessionStorage.getItem('entityAnalysisResult');
+      if (storedEntities) {
+        try {
+          entityData = JSON.parse(storedEntities);
+        } catch (e) {
+          console.error('Error parsing entity data:', e);
         }
       }
 
@@ -718,18 +804,26 @@
       loadingState.classList.remove('hidden');
 
       try {
+        // Build request body with optional entities
+        const requestBody = {
+          products: extractionResults,
+          keywords: seoKeywords,
+          search_query: searchQuery,  // Pass search query for generic naming
+          config: {
+            model: 'gpt-4o-mini',
+            temperature: 0.7
+          }
+        };
+
+        // Include entities if available
+        if (entityData) {
+          requestBody.entities = entityData;
+        }
+
         const response = await fetch('/api/seo/generate-description', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            products: extractionResults,
-            keywords: seoKeywords,
-            search_query: searchQuery,  // Pass search query for generic naming
-            config: {
-              model: 'gpt-4o-mini',
-              temperature: 0.7
-            }
-          })
+          body: JSON.stringify(requestBody)
         });
 
         const data = await response.json();
@@ -791,9 +885,6 @@
       const wordsEl = safeGet('result-words');
       if (wordsEl) wordsEl.textContent = `${generatedDescription.word_count} words`;
 
-      const modelEl = safeGet('result-model');
-      if (modelEl) modelEl.textContent = generatedDescription.model_used;
-
       // Render keywords
       const keywordsEl = safeGet('result-keywords');
       if (keywordsEl) {
@@ -804,6 +895,59 @@
         } else {
           keywordsEl.innerHTML = '<span style="color: var(--muted);">No keywords specified</span>';
         }
+      }
+
+      // Show/hide warning based on whether entities were used
+      const entitiesWarning = safeGet('entities-warning');
+      if (entitiesWarning) {
+        if (generatedDescription.entities_used) {
+          entitiesWarning.classList.add('hidden');
+        } else {
+          entitiesWarning.classList.remove('hidden');
+        }
+      }
+
+      // Render entities (from API response if available, fallback to sessionStorage)
+      const entitiesSection = safeGet('entities-section');
+      const primaryEntityEl = safeGet('result-primary-entity');
+      const entitiesListEl = safeGet('result-entities');
+
+      // Use entities from API response first, then fallback to sessionStorage entityData
+      const hasEntitiesFromApi = generatedDescription.entities_used && generatedDescription.primary_entity_path;
+      const useEntityData = hasEntitiesFromApi ? {
+        primary_entity_path: generatedDescription.primary_entity_path,
+        supporting_entities: (generatedDescription.supporting_entities || []).map(name => ({ name }))
+      } : entityData;
+
+      if (useEntityData && entitiesSection && primaryEntityEl && entitiesListEl) {
+        // Show entities section
+        entitiesSection.classList.remove('hidden');
+
+        // Display primary entity path
+        if (useEntityData.primary_entity_path) {
+          primaryEntityEl.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+            ${escapeHtml(useEntityData.primary_entity_path)}
+          `;
+        }
+
+        // Display supporting entities
+        if (useEntityData.supporting_entities && useEntityData.supporting_entities.length > 0) {
+          entitiesListEl.innerHTML = useEntityData.supporting_entities
+            .map(entity => {
+              const name = typeof entity === 'string' ? entity : entity.name;
+              const type = entity.type || entity.entity_type || 'unknown';
+              return `<span class="entity-tag ${type}">${escapeHtml(name)}</span>`;
+            })
+            .join('');
+        } else {
+          entitiesListEl.innerHTML = '<span style="color: var(--muted); font-size: 13px;">No supporting entities</span>';
+        }
+      } else if (entitiesSection) {
+        // Hide entities section if no entity data
+        entitiesSection.classList.add('hidden');
       }
     }
 

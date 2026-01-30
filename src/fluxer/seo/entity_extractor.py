@@ -3,11 +3,13 @@ Hybrid entity extraction orchestrator.
 
 Combines deterministic rules extraction with LLM-powered gap filling.
 Strategy: Rules first, LLM only when confidence is low or critical types missing.
+
+TF-IDF term grouping is now fully LLM-powered for dynamic, context-aware categorization.
 """
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import List, Dict, Tuple, Optional
+import json
+from typing import List, Dict, Tuple, Optional, Any
 
 from ..models import (
     EntityExtractionResult,
@@ -24,6 +26,28 @@ from ..config import Config
 from ..logger import get_logger
 
 logger = get_logger(__name__)
+
+# Check OpenAI availability for dynamic term grouping
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logger.info("OpenAI not available for dynamic term grouping")
+
+# Global OpenAI client (lazy initialization)
+_openai_client: Optional[Any] = None
+
+
+def _get_openai_client() -> Optional[Any]:
+    """Get or initialize the OpenAI client."""
+    global _openai_client
+    if _openai_client is None and OPENAI_AVAILABLE:
+        api_key = Config.OPENAI_API_KEY
+        if api_key:
+            _openai_client = OpenAI(api_key=api_key)
+            logger.debug("OpenAI client initialized for term grouping")
+    return _openai_client
 
 
 class EntityExtractor:
@@ -43,37 +67,6 @@ class EntityExtractor:
 
     # Entity types that should trigger LLM if missing
     CRITICAL_TYPES = ['material', 'dimension']
-
-    # Category keywords for TF-IDF term grouping
-    CATEGORY_KEYWORDS = {
-        'core_attributes': {
-            'size', 'width', 'height', 'depth', 'length', 'diameter',
-            'material', 'colour', 'color', 'finish', 'weight', 'capacity',
-            'volume', 'dimension', 'thickness', 'gauge', 'grade', 'density',
-            'pattern', 'style', 'texture', 'surface'
-        },
-        'functional_terms': {
-            'durability', 'durable', 'strength', 'load', 'rating',
-            'resistance', 'heat', 'water', 'fire', 'corrosion', 'rust',
-            'temperature', 'moisture', 'uv', 'fade', 'fading', 'longevity',
-            'lifespan', 'performance', 'efficient', 'energy', 'power',
-            'capacity', 'speed', 'flow', 'pressure', 'noise'
-        },
-        'usage_context': {
-            'indoor', 'outdoor', 'interior', 'exterior', 'residential',
-            'commercial', 'industrial', 'domestic', 'home', 'office', 'garden',
-            'patio', 'pool', 'bathroom', 'kitchen', 'bedroom', 'living',
-            'room', 'space', 'area', 'climate', 'coastal', 'exposure',
-            'environment', 'condition', 'season', 'weather', 'tropical'
-        },
-        'compliance_standards': {
-            'standard', 'certification', 'certified', 'au', 'nz', 'as/nzs',
-            'iso', 'safety', 'warrant', 'warranty', 'guarantee',
-            'care', 'instruction', 'maintenance', 'clean', 'cleaning',
-            'disposal', 'recycle', 'recycling', 'label', 'rating', 'ce',
-            'fda', 'rohs', 'reach'
-        }
-    }
 
     # Placement rules by entity type
     PLACEMENT_RULES = {
@@ -161,8 +154,8 @@ class EntityExtractor:
         """
         audit = AuditInfo()
 
-        # Step 1: Group TF-IDF terms into buckets
-        grouped_terms, noise_terms = self._group_terms(tfidf_terms)
+        # Step 1: Group TF-IDF terms into buckets (LLM-powered for context-aware grouping)
+        grouped_terms, noise_terms = self._group_terms(tfidf_terms, search_query=search_query)
         logger.info(f"Grouped {sum(len(v) for v in grouped_terms.values())} terms, {len(noise_terms)} noise")
 
         # Step 2: Run rules extraction (pass search_query for context-aware filtering)
@@ -269,7 +262,8 @@ class EntityExtractor:
         product_id: str,
         product_name: str,
         tfidf_terms: List[Dict],
-        product_description: Optional[str] = None
+        product_description: Optional[str] = None,
+        search_query: Optional[str] = None
     ) -> EntityExtractionResult:
         """
         Backward-compatible simple extraction (rules only, original format).
@@ -279,12 +273,13 @@ class EntityExtractor:
             product_name: Product name/title
             tfidf_terms: List of TF-IDF term dicts
             product_description: Optional product description
+            search_query: Optional search query for context-aware grouping
 
         Returns:
             EntityExtractionResult in original format
         """
-        # Group terms
-        grouped_terms, noise_terms = self._group_terms(tfidf_terms)
+        # Group terms (LLM-powered for context-aware grouping)
+        grouped_terms, noise_terms = self._group_terms(tfidf_terms, search_query=search_query)
 
         # Run rules extraction
         rules_result = self.rules_engine.extract(
@@ -323,45 +318,133 @@ class EntityExtractor:
 
     def _group_terms(
         self,
-        tfidf_terms: List[Dict]
+        tfidf_terms: List[Dict],
+        search_query: Optional[str] = None
     ) -> Tuple[Dict[str, List[str]], List[str]]:
-        """Group TF-IDF terms into categories."""
-        grouped = defaultdict(list)
-        noise = []
+        """
+        Group TF-IDF terms into categories using LLM for dynamic, context-aware classification.
 
-        categories = {
-            'core_attributes': 'Core Attributes',
-            'functional_terms': 'Functional Terms',
-            'usage_context': 'Usage Context',
-            'compliance_standards': 'Compliance / Standards'
-        }
+        This method uses OpenAI to intelligently categorize terms based on the product context,
+        eliminating the need for hardcoded keyword lists.
 
+        Args:
+            tfidf_terms: List of TF-IDF term dicts with 'phrase' key
+            search_query: Optional search query for context
+
+        Returns:
+            Tuple of (grouped_terms dict, noise_terms list)
+        """
+        # Extract phrases from term data
+        phrases = []
         for term_data in tfidf_terms:
-            phrase = term_data.get('phrase', '').lower().strip()
-            if not phrase:
-                continue
+            phrase = term_data.get('phrase', '').strip()
+            if phrase:
+                phrases.append(phrase)
 
-            found_category = None
-            for category_key, keywords in self.CATEGORY_KEYWORDS.items():
-                for keyword in keywords:
-                    if keyword.lower() in phrase:
-                        found_category = categories[category_key]
-                        break
-                if found_category:
-                    break
+        if not phrases:
+            return {}, []
 
-            if found_category:
-                grouped[found_category].append(phrase)
-            else:
-                noise.append(phrase)
+        # Try LLM-powered grouping first
+        client = _get_openai_client()
+        if client and OPENAI_AVAILABLE:
+            try:
+                return self._group_terms_with_llm(client, phrases, search_query)
+            except Exception as e:
+                logger.warning(f"LLM term grouping failed, using fallback: {e}")
 
-        # Remove duplicates
-        grouped_unique = {
-            cat: list(dict.fromkeys(terms))
-            for cat, terms in grouped.items()
-        }
+        # Fallback: simple grouping (all terms go to Core Attributes)
+        return self._group_terms_fallback(phrases)
 
-        return grouped_unique, noise
+    def _group_terms_with_llm(
+        self,
+        client: Any,
+        phrases: List[str],
+        search_query: Optional[str] = None
+    ) -> Tuple[Dict[str, List[str]], List[str]]:
+        """
+        Use OpenAI to dynamically categorize TF-IDF terms based on product context.
+
+        The LLM understands the product type and groups terms intelligently without
+        requiring hardcoded keyword lists.
+        """
+        # Limit phrases for API efficiency
+        phrases_to_classify = phrases[:100]  # Limit to 100 terms
+
+        context = f'Product search: "{search_query}"' if search_query else "General product"
+
+        prompt = f"""You are a product data analyst. Categorize these TF-IDF terms extracted from product listings.
+
+{context}
+
+Terms to categorize:
+{json.dumps(phrases_to_classify)}
+
+Categorize each term into ONE of these groups based on what the term describes:
+1. "Core Attributes" - Physical properties: size, dimensions, materials, colors, patterns, design features, fabric types, fits, styles
+2. "Functional Terms" - Performance & benefits: durability, resistance, breathability, stretch, comfort, technical features
+3. "Care Instructions" - Maintenance: washing, cleaning, ironing, drying instructions
+4. "Compliance / Standards" - Certifications, safety standards, warranties (NOT shipping/delivery)
+5. "Noise" - Irrelevant terms: shipping info, website names, generic words, prices, marketing fluff
+
+IMPORTANT RULES:
+- Color names and patterns (e.g., "marle", "leo water", "stripe") go in "Core Attributes"
+- Shipping/delivery terms go in "Noise" (e.g., "free delivery", "standard delivery")
+- Care-related terms go in "Care Instructions" (e.g., "machine wash", "cold wash")
+- Only actual certifications/standards go in "Compliance / Standards" (e.g., "ISO", "OEKO-TEX")
+
+Return ONLY valid JSON in this exact format:
+{{"Core Attributes": ["term1", "term2"], "Functional Terms": ["term3"], "Care Instructions": ["term4"], "Compliance / Standards": ["term5"], "Noise": ["term6", "term7"]}}
+
+Include ALL terms from the input. Empty categories should be empty arrays []."""
+
+        try:
+            response = client.chat.completions.create(
+                model=getattr(Config, 'ENTITY_LLM_MODEL', 'gpt-4o-mini'),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=2000
+            )
+
+            content = response.choices[0].message.content.strip()
+
+            # Parse JSON response
+            # Handle potential markdown code blocks
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+
+            result = json.loads(content)
+
+            # Extract noise terms
+            noise = result.pop("Noise", [])
+
+            # Remove empty categories
+            grouped = {k: v for k, v in result.items() if v}
+
+            logger.info(f"LLM grouped {len(phrases_to_classify)} terms into {len(grouped)} categories, {len(noise)} noise")
+
+            return grouped, noise
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse LLM grouping response: {e}")
+            raise
+        except Exception as e:
+            logger.warning(f"LLM grouping API call failed: {e}")
+            raise
+
+    def _group_terms_fallback(
+        self,
+        phrases: List[str]
+    ) -> Tuple[Dict[str, List[str]], List[str]]:
+        """
+        Simple fallback grouping when LLM is unavailable.
+
+        Puts all terms in Core Attributes as a safe default.
+        """
+        logger.info("Using fallback term grouping (LLM unavailable)")
+        return {"Core Attributes": phrases}, []
 
     def _determine_primary_entity_path(
         self,

@@ -660,7 +660,8 @@ def generate_description() -> tuple[Dict[str, Any], int]:
     Generate a single SEO-optimized description from all products and keywords.
 
     Combines extracted data from multiple products and identified keywords
-    to generate ONE unified product description.
+    to generate ONE unified product description. Optionally incorporates
+    entity analysis results for richer, more accurate descriptions.
 
     Expected JSON:
     {
@@ -678,6 +679,10 @@ def generate_description() -> tuple[Dict[str, Any], int]:
             {"phrase": "keyword", "importance_score": 0.95},
             ...
         ],
+        "entities": {  // Optional - from entity analysis
+            "primary_entity_path": "Drinkware > Cup",
+            "supporting_entities": [{"name": "Ceramic", "type": "material"}, ...]
+        },
         "product_name": "Optional override name",  // Optional
         "config": {  // Optional
             "model": "gpt-4o-mini",
@@ -693,7 +698,10 @@ def generate_description() -> tuple[Dict[str, Any], int]:
             "description": "...",
             "word_count": 85,
             "keywords_used": [...],
-            "products_combined": 5
+            "products_combined": 5,
+            "entities_used": true,
+            "primary_entity_path": "Drinkware > Cup",
+            "supporting_entities": ["Ceramic", "Microwave Safe"]
         }
     }
     """
@@ -701,6 +709,7 @@ def generate_description() -> tuple[Dict[str, Any], int]:
         data = request.get_json()
         products = data.get('products', [])
         keywords = data.get('keywords', [])
+        entities = data.get('entities')  # Optional entity analysis result
         product_name_override = data.get('product_name')
         search_query = data.get('search_query', '')  # Use search query as generic product name
         config = data.get('config', {})
@@ -721,7 +730,8 @@ def generate_description() -> tuple[Dict[str, Any], int]:
                 'message': 'Keywords are required for description generation'
             }), 400
 
-        logger.info(f"Generating single description from {len(products)} products and {len(keywords)} keywords")
+        entities_info = f", entities={'provided' if entities else 'not provided'}"
+        logger.info(f"Generating single description from {len(products)} products and {len(keywords)} keywords{entities_info}")
 
         # Initialize generator
         generator = DescriptionGenerator(
@@ -729,11 +739,12 @@ def generate_description() -> tuple[Dict[str, Any], int]:
             temperature=config.get('temperature', 0.7)
         )
 
-        # Generate single description from all products and keywords
+        # Generate single description from all products, keywords, and optionally entities
         result = generator.generate(
             products=products,
             keywords=keywords,
-            product_name=product_name_override
+            product_name=product_name_override,
+            entities=entities
         )
 
         if not result.success:
@@ -742,7 +753,7 @@ def generate_description() -> tuple[Dict[str, Any], int]:
                 'message': result.error or 'Description generation failed'
             }), 500
 
-        logger.info(f"Generated description: {result.word_count} words from {result.products_combined} products")
+        logger.info(f"Generated description: {result.word_count} words from {result.products_combined} products (entities_used={result.entities_used})")
 
         return jsonify({
             'status': 'success',
@@ -754,7 +765,10 @@ def generate_description() -> tuple[Dict[str, Any], int]:
                 'keywords_used': result.keywords_used,
                 'model_used': result.model_used,
                 'products_combined': result.products_combined,
-                'source_text_preview': result.source_text[:500] + '...' if len(result.source_text) > 500 else result.source_text
+                'source_text_preview': result.source_text[:500] + '...' if len(result.source_text) > 500 else result.source_text,
+                'entities_used': result.entities_used,
+                'primary_entity_path': result.primary_entity_path,
+                'supporting_entities': result.supporting_entities
             }
         })
 

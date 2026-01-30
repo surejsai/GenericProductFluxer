@@ -41,7 +41,7 @@ Source Text (facts only, do not go beyond this):
 
 Recommended Keywords / Phrases (use 6–10 naturally, no stuffing):
 {keywords_list}
-
+{entities_section}
 Guidelines:
 - CRITICAL: Do NOT mention any brand names, manufacturer names, or specific product model numbers (e.g., no "Westinghouse", "Samsung", "WRF610SA", etc.).
 - First sentence: describe the generic product type with a primary keyword.
@@ -65,6 +65,9 @@ class GeneratedDescription:
     products_combined: int = 1
     success: bool = True
     error: Optional[str] = None
+    entities_used: bool = False
+    primary_entity_path: Optional[str] = None
+    supporting_entities: List[str] = None
 
 
 @dataclass
@@ -255,7 +258,8 @@ class DescriptionGenerator:
         products: List[Dict],
         keywords: List[Dict],
         product_name: Optional[str] = None,
-        price: Optional[str] = None
+        price: Optional[str] = None,
+        entities: Optional[Dict] = None
     ) -> GeneratedDescription:
         """
         Generate a single SEO-optimized description from all products and keywords.
@@ -265,6 +269,7 @@ class DescriptionGenerator:
             keywords: List of SEO keywords from TF-IDF analysis
             product_name: Optional override for product name
             price: Optional override for price
+            entities: Optional entity analysis result with primary_entity_path and supporting_entities
 
         Returns:
             GeneratedDescription with the generated text
@@ -272,6 +277,11 @@ class DescriptionGenerator:
         # Determine product name and price
         final_product_name = product_name or self._get_primary_product_name(products)
         final_price = price or self._get_price_range(products)
+
+        # Track entity usage
+        entities_used = False
+        primary_entity_path = None
+        supporting_entity_names = []
 
         if not OPENAI_AVAILABLE:
             return GeneratedDescription(
@@ -284,7 +294,10 @@ class DescriptionGenerator:
                 model_used=self.model,
                 products_combined=len(products),
                 success=False,
-                error="OpenAI package not installed. Install with: pip install openai"
+                error="OpenAI package not installed. Install with: pip install openai",
+                entities_used=False,
+                primary_entity_path=None,
+                supporting_entities=None
             )
 
         if not self._client:
@@ -298,7 +311,10 @@ class DescriptionGenerator:
                 model_used=self.model,
                 products_combined=len(products),
                 success=False,
-                error="OpenAI API key not configured. Set OPENAI_API_KEY environment variable."
+                error="OpenAI API key not configured. Set OPENAI_API_KEY environment variable.",
+                entities_used=False,
+                primary_entity_path=None,
+                supporting_entities=None
             )
 
         # Build combined source text from all products
@@ -309,12 +325,36 @@ class DescriptionGenerator:
         selected_keywords = self._select_keywords(keywords, num_keywords)
         keywords_list = ", ".join(selected_keywords)
 
+        # Build entities section if entities are provided
+        entities_section = ""
+        if entities:
+            entities_used = True
+            primary_entity_path = entities.get('primary_entity_path')
+            supporting = entities.get('supporting_entities', [])
+
+            # Extract entity names
+            for entity in supporting:
+                name = entity.get('name', '')
+                if name:
+                    supporting_entity_names.append(name)
+
+            # Build the entities section for the prompt
+            entity_lines = []
+            if primary_entity_path:
+                entity_lines.append(f"Product Category: {primary_entity_path}")
+            if supporting_entity_names:
+                entity_lines.append(f"Key Attributes: {', '.join(supporting_entity_names[:8])}")
+
+            if entity_lines:
+                entities_section = "\n\nProduct Entities (incorporate these naturally):\n" + "\n".join(entity_lines) + "\n"
+
         # Build user prompt
         user_prompt = USER_PROMPT_TEMPLATE.format(
             product_name=final_product_name,
             price=final_price or "N/A",
             source_text=source_text,
-            keywords_list=keywords_list
+            keywords_list=keywords_list,
+            entities_section=entities_section
         )
 
         try:
@@ -333,7 +373,7 @@ class DescriptionGenerator:
             description = response.choices[0].message.content.strip()
             word_count = len(description.split())
 
-            logger.info(f"Generated description for '{final_product_name}': {word_count} words (from {len(products)} products)")
+            logger.info(f"Generated description for '{final_product_name}': {word_count} words (from {len(products)} products, entities_used={entities_used})")
 
             return GeneratedDescription(
                 product_name=final_product_name,
@@ -344,7 +384,10 @@ class DescriptionGenerator:
                 word_count=word_count,
                 model_used=self.model,
                 products_combined=len(products),
-                success=True
+                success=True,
+                entities_used=entities_used,
+                primary_entity_path=primary_entity_path,
+                supporting_entities=supporting_entity_names if supporting_entity_names else None
             )
 
         except Exception as e:
@@ -359,7 +402,10 @@ class DescriptionGenerator:
                 model_used=self.model,
                 products_combined=len(products),
                 success=False,
-                error=str(e)
+                error=str(e),
+                entities_used=entities_used,
+                primary_entity_path=primary_entity_path,
+                supporting_entities=supporting_entity_names if supporting_entity_names else None
             )
 
 

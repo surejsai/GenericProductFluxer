@@ -13,13 +13,102 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
-from typing import List, Dict, Optional, Set, Tuple
+from typing import List, Dict, Optional, Set, Tuple, Any
 
 from ..models import EntityItem, Conflict
+from ..config import Config
 from ..logger import get_logger
 
 logger = get_logger(__name__)
+
+# Check OpenAI availability for dynamic subtype inference
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logger.info("OpenAI not available for dynamic subtype inference. Using fallback.")
+
+
+# =============================================================================
+# Global OpenAI client (lazy initialization)
+# =============================================================================
+_openai_client: Optional[Any] = None
+
+
+def _get_openai_client() -> Optional[Any]:
+    """Get or initialize the OpenAI client."""
+    global _openai_client
+    if _openai_client is None and OPENAI_AVAILABLE:
+        api_key = Config.OPENAI_API_KEY
+        if api_key:
+            _openai_client = OpenAI(api_key=api_key)
+            logger.info("OpenAI client initialized for dynamic subtype inference")
+    return _openai_client
+
+
+# =============================================================================
+# Cached subtype inference using OpenAI
+# =============================================================================
+@lru_cache(maxsize=256)
+def _infer_subtype_from_llm(category: str, text: str) -> Optional[str]:
+    """
+    Use OpenAI to dynamically infer the product subtype.
+
+    Cached to avoid repeated API calls for the same (category, text) pair.
+
+    Args:
+        category: The detected product category (e.g., "Food", "Apparel")
+        text: The search query or product description text
+
+    Returns:
+        Inferred subtype string or None if inference fails
+    """
+    client = _get_openai_client()
+    if client is None:
+        return None
+
+    # Use a short, efficient prompt
+    prompt = f"""Given the product category "{category}" and search text "{text}", identify the most specific product subtype.
+
+Return ONLY the subtype name (1-3 words, title case). Examples:
+- For Food + "pocky chocolate sticks" → "Snack Stick"
+- For Drinkware + "ceramic coffee mug" → "Coffee Mug"
+- For Apparel + "women's bike shorts" → "Bike Shorts"
+- For Appliance + "gas cooktop 5 burner" → "Gas Cooktop"
+
+If you cannot determine a specific subtype, respond with just "General".
+
+Subtype for {category} + "{text}":"""
+
+    try:
+        response = client.chat.completions.create(
+            model=getattr(Config, 'ENTITY_LLM_MODEL', 'gpt-4o-mini'),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=20
+        )
+
+        subtype = response.choices[0].message.content.strip()
+
+        # Clean up the response
+        subtype = subtype.strip('"\'.')
+
+        # Reject overly generic or invalid responses
+        if not subtype or subtype.lower() in ('general', 'unknown', 'n/a', 'none'):
+            return None
+
+        # Ensure title case
+        subtype = subtype.title()
+
+        logger.debug(f"Dynamic subtype inference: {category} + '{text[:30]}...' → {subtype}")
+        return subtype
+
+    except Exception as e:
+        logger.warning(f"Dynamic subtype inference failed: {e}")
+        return None
 
 
 @dataclass
@@ -114,11 +203,12 @@ class EntityRulesEngine:
     # Primary entity keywords for path inference
     PRIMARY_ENTITY_KEYWORDS = {
         'Food': ['food', 'snack', 'snacks', 'candy', 'candies', 'chocolate', 'biscuit', 'biscuits', 'cookie', 'cookies', 'confectionery', 'confection', 'treat', 'treats', 'sweet', 'sweets', 'lolly', 'lollies', 'pocky', 'chips', 'crisps', 'crackers', 'cracker', 'wafer', 'wafers', 'gummy', 'gummies', 'caramel', 'toffee', 'fudge', 'mints', 'mint', 'licorice', 'liquorice', 'marshmallow', 'nougat', 'praline', 'truffle', 'bonbon', 'jellybean', 'lollipop', 'hard candy', 'chewy', 'crunchy', 'crispy', 'edible', 'flavour', 'flavor', 'strawberry', 'matcha', 'vanilla', 'cocoa', 'hazelnut'],
-        'Apparel': ['apparel', 'clothing', 'clothes', 'wear', 'shirt', 'short', 'shorts', 'pants', 'dress', 'jacket', 'coat', 'sweater', 'hoodie', 'tank top', 'blouse top', 'crop top', 'bottom', 'skirt', 'legging', 'leggings', 'bike short', 'bike shorts', 'activewear', 'sportswear', 'athleisure', 'underwear', 'bra', 'sock', 'socks'],
+        'Drinkware': ['cup', 'cups', 'mug', 'mugs', 'glass', 'glasses', 'tumbler', 'tumblers', 'drinkware', 'goblet', 'goblets', 'wine glass', 'champagne flute', 'beer glass', 'coffee cup', 'tea cup', 'espresso cup', 'travel mug', 'sippy cup', 'shot glass', 'highball', 'lowball', 'pint glass', 'stemware', 'glassware'],
+        'Apparel': ['apparel', 'clothing', 'clothes', 'wear', 'shirt', 'short', 'shorts', 'pants', 'dress', 'jacket', 'coat', 'sweater', 'hoodie', 'tank top', 'blouse top', 'crop top', 'bottom', 'skirt', 'legging', 'leggings', 'bike short', 'bike shorts', 'activewear', 'sportswear', 'athleisure', 'underwear', 'bra', 'sock', 'socks', 'swimwear', 'swimsuit', 'swim short', 'swim shorts', 'swim trunk', 'swim trunks', 'board short', 'board shorts', 'bikini', 'rashie', 'rash guard', 'wetsuit', 'trunks', 'briefs', 'boxer', 'boxers'],
         'Footwear': ['footwear', 'shoe', 'shoes', 'boot', 'boots', 'sneaker', 'sneakers', 'sandal', 'sandals', 'slipper', 'slippers', 'heel', 'heels', 'loafer', 'loafers', 'trainer', 'trainers'],
         'Accessories': ['accessory', 'accessories', 'bag', 'bags', 'handbag', 'purse', 'wallet', 'belt', 'hat', 'cap', 'scarf', 'glove', 'gloves', 'watch', 'jewelry', 'jewellery', 'sunglasses'],
         'Furniture': ['furniture', 'table', 'chair', 'sofa', 'bed', 'cabinet', 'desk', 'shelving', 'bench', 'stool', 'ottoman'],
-        'Appliance': ['appliance', 'cooktop', 'stove', 'oven', 'cooker', 'rangehood', 'hood', 'dishwasher', 'refrigerator', 'microwave', 'freezer'],
+        'Appliance': ['appliance', 'cooktop', 'stove', 'oven', 'cooker', 'rangehood', 'hood', 'dishwasher', 'refrigerator', 'freezer', 'microwave oven', 'microwave appliance'],
         'Cookware': ['cookware', 'pan', 'pot', 'skillet', 'wok', 'stock pot', 'saucepan', 'frypan', 'bakeware'],
         'Flooring': ['flooring', 'floor', 'tile', 'laminate', 'vinyl', 'carpet', 'rug', 'timber floor'],
         'Textile': ['textile', 'fabric', 'cloth', 'curtain', 'bedding', 'cushion', 'throw', 'blanket', 'pillow'],
@@ -131,14 +221,65 @@ class EntityRulesEngine:
         'Sports': ['sports', 'sport', 'fitness', 'gym', 'exercise', 'workout', 'yoga', 'cycling', 'running', 'swimming'],
     }
 
+    # Keywords that should be IGNORED when they appear in compound phrases
+    # e.g., "microwave safe" should not trigger Appliance category
+    # e.g., "cool iron" should not trigger Iron material (it's a care instruction)
+    COMPOUND_PHRASE_EXCLUSIONS = {
+        'microwave': ['microwave safe', 'microwave friendly', 'microwave proof', 'microwave-safe'],
+    }
+
+    # Material names that should be excluded when they appear in care/laundry instruction contexts
+    # "iron" as an action (ironing clothes) vs "iron" as a material (the metal)
+    CARE_INSTRUCTION_MATERIAL_EXCLUSIONS = {
+        'iron': [
+            'cool iron', 'warm iron', 'hot iron', 'steam iron', 'no iron', 'do not iron',
+            'iron reverse', 'reverse iron', 'iron inside', 'iron on reverse',
+            'iron low', 'iron medium', 'iron high', 'iron setting',
+            'softener iron', 'softener cool iron', 'iron reverse dry',
+            'line dry iron', 'tumble dry iron', 'dry clean iron',
+        ],
+        'ash': [
+            'wash', 'machine wash', 'hand wash', 'cold wash', 'warm wash',  # "wash" contains "ash"
+        ],
+    }
+
+    # Materials that NEVER make sense for textile/apparel products
+    # These are always excluded regardless of specific category when text contains textile keywords
+    TEXTILE_IMPOSSIBLE_MATERIALS = {
+        'stainless steel', 'steel', 'iron', 'aluminium', 'aluminum', 'brass', 'copper',
+        'bronze', 'granite', 'marble', 'concrete', 'glass', 'ceramic', 'porcelain',
+        'timber', 'oak', 'pine', 'teak', 'ash', 'walnut', 'maple', 'birch', 'mahogany',
+        'chrome', 'nickel', 'zinc', 'tin', 'lead', 'pewter', 'cast iron',
+    }
+
+    # Short material names that require STRICT word boundary matching
+    # to avoid false positives like "ash" in "wash" or "tin" in "satin"
+    STRICT_WORD_BOUNDARY_MATERIALS = {
+        'ash',  # falsely matches "wash", "crash", "flash", "splash"
+        'tin',  # falsely matches "satin", "latin", "martin"
+        'oak',  # falsely matches "soak", "cloak"
+        'gel',  # falsely matches "angel"
+        'ice',  # falsely matches "price", "service", "nice"
+    }
+
+    # Keywords that indicate the product is a textile/apparel item
+    TEXTILE_INDICATOR_KEYWORDS = {
+        'shirt', 'shorts', 'pants', 'dress', 'jacket', 'coat', 'sweater', 'hoodie',
+        'skirt', 'legging', 'top', 'bottom', 'swim', 'swimwear', 'swimsuit', 'bikini',
+        'trunks', 'underwear', 'bra', 'sock', 'apparel', 'clothing', 'wear', 'garment',
+        'fabric', 'cotton', 'polyester', 'nylon', 'spandex', 'lycra', 'elastic',
+        'waistband', 'drawstring', 'pocket', 'seam', 'hem', 'sleeve', 'collar',
+    }
+
     # Materials that are NOT applicable for certain categories
     # Used to filter out irrelevant materials from TF-IDF noise
     EXCLUDED_MATERIALS_BY_CATEGORY = {
         'Food': ['stainless steel', 'steel', 'iron', 'aluminium', 'aluminum', 'brass', 'copper', 'bronze', 'granite', 'marble', 'concrete', 'glass', 'ceramic', 'porcelain', 'timber', 'oak', 'pine', 'teak', 'ash', 'walnut', 'leather', 'polyester', 'nylon', 'cotton', 'wool', 'silk', 'linen', 'velvet', 'suede', 'denim', 'lycra', 'spandex', 'acrylic', 'vinyl', 'rubber'],
-        'Apparel': ['stainless steel', 'steel', 'iron', 'aluminium', 'aluminum', 'brass', 'copper', 'bronze', 'granite', 'marble', 'concrete', 'glass', 'ceramic', 'porcelain', 'timber', 'oak', 'pine', 'teak', 'ash', 'walnut'],
-        'Footwear': ['stainless steel', 'steel', 'iron', 'aluminium', 'aluminum', 'brass', 'copper', 'bronze', 'granite', 'marble', 'concrete', 'glass', 'ceramic', 'porcelain', 'timber', 'oak', 'pine', 'teak'],
-        'Accessories': ['stainless steel', 'iron', 'aluminium', 'granite', 'marble', 'concrete', 'timber', 'oak', 'pine', 'teak'],
-        'Sports': ['stainless steel', 'steel', 'iron', 'granite', 'marble', 'concrete', 'glass', 'porcelain', 'timber', 'oak', 'pine', 'teak', 'ash'],
+        'Drinkware': ['steel', 'iron', 'aluminium', 'aluminum', 'brass', 'copper', 'bronze', 'granite', 'marble', 'concrete', 'timber', 'oak', 'pine', 'teak', 'ash', 'walnut', 'leather', 'polyester', 'nylon', 'cotton', 'wool', 'silk', 'linen', 'velvet', 'suede', 'denim', 'lycra', 'spandex', 'vinyl', 'rubber'],
+        'Apparel': ['stainless steel', 'steel', 'iron', 'aluminium', 'aluminum', 'brass', 'copper', 'bronze', 'granite', 'marble', 'concrete', 'glass', 'ceramic', 'porcelain', 'timber', 'oak', 'pine', 'teak', 'ash', 'walnut', 'maple', 'birch', 'mahogany', 'chrome', 'nickel', 'zinc'],
+        'Footwear': ['stainless steel', 'steel', 'iron', 'aluminium', 'aluminum', 'brass', 'copper', 'bronze', 'granite', 'marble', 'concrete', 'glass', 'ceramic', 'porcelain', 'timber', 'oak', 'pine', 'teak', 'ash'],
+        'Accessories': ['stainless steel', 'iron', 'aluminium', 'granite', 'marble', 'concrete', 'timber', 'oak', 'pine', 'teak', 'ash'],
+        'Sports': ['stainless steel', 'steel', 'iron', 'granite', 'marble', 'concrete', 'glass', 'porcelain', 'timber', 'oak', 'pine', 'teak', 'ash', 'walnut', 'maple'],
     }
 
     def __init__(self, data_dir: Optional[Path] = None):
@@ -463,20 +604,115 @@ class EntityRulesEngine:
 
         return entities[:3]
 
+    def _is_material_in_care_context(self, material_name: str, text: str) -> bool:
+        """
+        Check if a material name appears only in care instruction contexts.
+
+        E.g., "iron" in "cool iron" or "iron reverse" is a care instruction,
+        not the metal material.
+
+        Args:
+            material_name: The material name to check (e.g., "iron")
+            text: The full text to search in
+
+        Returns:
+            True if the material appears ONLY in care instruction contexts
+        """
+        material_lower = material_name.lower()
+        text_lower = text.lower()
+
+        # Check if this material has care instruction exclusions
+        exclusion_patterns = self.CARE_INSTRUCTION_MATERIAL_EXCLUSIONS.get(material_lower, [])
+        if not exclusion_patterns:
+            return False
+
+        # Find all occurrences of the material in the text
+        # Check if EVERY occurrence is part of a care instruction phrase
+        import re
+        material_pattern = r'\b' + re.escape(material_lower) + r'\b'
+        matches = list(re.finditer(material_pattern, text_lower))
+
+        if not matches:
+            return False
+
+        # For each occurrence, check if it's part of a care instruction phrase
+        all_in_care_context = True
+        for match in matches:
+            match_start = match.start()
+            match_end = match.end()
+
+            # Get surrounding context (50 chars before and after)
+            context_start = max(0, match_start - 50)
+            context_end = min(len(text_lower), match_end + 50)
+            context = text_lower[context_start:context_end]
+
+            # Check if this occurrence is part of any care instruction pattern
+            in_care_context = False
+            for pattern in exclusion_patterns:
+                if pattern.lower() in context:
+                    in_care_context = True
+                    break
+
+            if not in_care_context:
+                all_in_care_context = False
+                break
+
+        return all_in_care_context
+
+    def _is_textile_product(self, text: str) -> bool:
+        """
+        Check if the text indicates a textile/apparel product.
+
+        Uses TEXTILE_INDICATOR_KEYWORDS to detect textile products even if
+        the category detection might miss them.
+        """
+        text_lower = text.lower()
+        words = set(text_lower.split())
+
+        # Check for textile indicator keywords
+        for keyword in self.TEXTILE_INDICATOR_KEYWORDS:
+            # Whole word match
+            if keyword in words:
+                return True
+            # Substring match for compound words (e.g., "swimshorts")
+            if keyword in text_lower:
+                return True
+
+        return False
+
+    def _is_whole_word_match(self, word: str, text: str) -> bool:
+        """
+        Check if a word appears as a complete word in text (not as substring of another word).
+
+        E.g., "ash" should NOT match "wash" but SHOULD match "ash wood" or "ash veneer".
+        """
+        import re
+        pattern = r'\b' + re.escape(word) + r'\b'
+        return bool(re.search(pattern, text, re.IGNORECASE))
+
     def _extract_materials(
         self,
         text: str,
         term_phrases: List[str],
         detected_category: Optional[str] = None
     ) -> List[EntityItem]:
-        """Extract material entities from dictionary lookup."""
+        """Extract material entities from dictionary lookup with aggressive textile filtering."""
         entities = []
         seen = set()
+
+        # Check if this is a textile product (aggressive detection)
+        is_textile = self._is_textile_product(text)
 
         # Get list of materials to exclude for this category
         excluded_materials = set()
         if detected_category and detected_category in self.EXCLUDED_MATERIALS_BY_CATEGORY:
             excluded_materials = {m.lower() for m in self.EXCLUDED_MATERIALS_BY_CATEGORY[detected_category]}
+
+        # AGGRESSIVE FILTERING: If text indicates a textile product, exclude ALL impossible materials
+        # This is a safety net even if category detection fails
+        if is_textile:
+            excluded_materials.update(self.TEXTILE_IMPOSSIBLE_MATERIALS)
+            logger.debug(f"Textile product detected - excluding {len(self.TEXTILE_IMPOSSIBLE_MATERIALS)} impossible materials")
 
         # Search through all material categories
         for category, materials in self._materials.items():
@@ -502,21 +738,38 @@ class EntityRulesEngine:
                     continue
 
                 for name in names_to_check:
-                    if name in text and name not in seen:
-                        # Find evidence
-                        evidence = self._find_evidence(name, text)
+                    # Check if this material requires strict word boundary matching
+                    if name in self.STRICT_WORD_BOUNDARY_MATERIALS:
+                        # Use word boundary matching to avoid false positives like "ash" in "wash"
+                        if not self._is_whole_word_match(name, text):
+                            continue
+                    else:
+                        # Standard substring match for other materials
+                        if name not in text:
+                            continue
 
-                        seen.add(name)
-                        seen.add(material_name.lower())  # Also mark canonical name
+                    if name in seen:
+                        continue
 
-                        entities.append(EntityItem(
-                            name=material_name.title(),
-                            entity_type='material',
-                            evidence=evidence,
-                            source='rules',
-                            why_it_matters=f"Material composition affects durability, maintenance, and appearance."
-                        ))
-                        break  # Found this material, move to next
+                    # Check if this material only appears in care instruction context
+                    if self._is_material_in_care_context(name, text):
+                        logger.debug(f"Skipping '{name}' - appears only in care instruction context")
+                        continue
+
+                    # Find evidence
+                    evidence = self._find_evidence(name, text)
+
+                    seen.add(name)
+                    seen.add(material_name.lower())  # Also mark canonical name
+
+                    entities.append(EntityItem(
+                        name=material_name.title(),
+                        entity_type='material',
+                        evidence=evidence,
+                        source='rules',
+                        why_it_matters=f"Material composition affects durability, maintenance, and appearance."
+                    ))
+                    break  # Found this material, move to next
 
         return entities[:5]  # Limit to 5 materials
 
@@ -724,18 +977,33 @@ class EntityRulesEngine:
         # Food/snack specific
         'pocky', 'chocolate', 'candy', 'snack', 'biscuit', 'cookie', 'confectionery',
         'gummy', 'wafer', 'chips', 'crackers', 'marshmallow', 'lolly', 'lollies',
-        # Apparel specific
+        # Drinkware specific
+        'cup', 'cups', 'mug', 'mugs', 'tumbler', 'goblet', 'drinkware', 'glassware',
+        # Apparel specific (including swimwear)
         'shirt', 'dress', 'jacket', 'pants', 'jeans', 'hoodie', 'sweater',
+        'swimwear', 'swimsuit', 'bikini', 'trunks', 'boardshorts', 'rashie',
         # Footwear specific
         'shoe', 'boot', 'sneaker', 'sandal',
         # Appliance specific
-        'cooktop', 'refrigerator', 'dishwasher', 'microwave', 'oven',
+        'cooktop', 'refrigerator', 'dishwasher', 'oven',
         # Electronics specific
         'laptop', 'phone', 'tablet', 'television', 'camera',
     }
 
     # Minimum score required for a confident category match
     MIN_CATEGORY_SCORE = 2.0  # Requires either 1 high-specificity match or 2+ generic matches
+
+    def _is_excluded_by_compound(self, keyword: str, text: str) -> bool:
+        """
+        Check if a keyword should be excluded because it appears in a compound phrase.
+
+        E.g., "microwave" should not match if it appears as "microwave safe".
+        """
+        exclusions = self.COMPOUND_PHRASE_EXCLUSIONS.get(keyword.lower(), [])
+        for phrase in exclusions:
+            if phrase.lower() in text.lower():
+                return True
+        return False
 
     def _detect_product_category(self, text: str) -> Optional[str]:
         """
@@ -744,6 +1012,7 @@ class EntityRulesEngine:
 
         High-specificity keywords get 3x weight.
         Requires minimum score to return a category.
+        Checks for compound phrase exclusions (e.g., "microwave safe" doesn't trigger Appliance).
         """
         if not text:
             return None
@@ -757,6 +1026,11 @@ class EntityRulesEngine:
             score = 0.0
             for kw in keywords:
                 kw_lower = kw.lower()
+
+                # Skip if this keyword is part of a compound phrase exclusion
+                if self._is_excluded_by_compound(kw_lower, text_lower):
+                    continue
+
                 # Check for whole word match first (more reliable)
                 if kw_lower in words:
                     weight = 3.0 if kw_lower in self.HIGH_SPECIFICITY_KEYWORDS else 1.0
@@ -817,6 +1091,11 @@ class EntityRulesEngine:
             score = 0.0
             for kw in keywords:
                 kw_lower = kw.lower()
+
+                # Skip if this keyword is part of a compound phrase exclusion
+                if self._is_excluded_by_compound(kw_lower, search_text):
+                    continue
+
                 # Whole word match (more reliable)
                 if kw_lower in words:
                     weight = 3.0 if kw_lower in self.HIGH_SPECIFICITY_KEYWORDS else 1.0
@@ -854,105 +1133,28 @@ class EntityRulesEngine:
         text: str,
         entities: List[EntityItem]
     ) -> Optional[str]:
-        """Infer a more specific subtype for the primary entity."""
-        subtype_hints = {
-            'Food': {
-                'chocolate': 'Chocolate',
-                'candy': 'Candy',
-                'snack': 'Snack',
-                'biscuit': 'Biscuit',
-                'cookie': 'Cookie',
-                'wafer': 'Wafer',
-                'chips': 'Chips',
-                'crackers': 'Crackers',
-                'gummy': 'Gummy',
-                'marshmallow': 'Marshmallow',
-                'lolly': 'Confectionery',
-                'confectionery': 'Confectionery',
-                'pocky': 'Snack Stick',
-                'sweet': 'Sweet',
-                'treat': 'Treat',
-            },
-            'Apparel': {
-                'bike short': 'Bike Short',
-                'bike shorts': 'Bike Shorts',
-                'legging': 'Leggings',
-                'leggings': 'Leggings',
-                'yoga pant': 'Yoga Pants',
-                'yoga pants': 'Yoga Pants',
-                'running short': 'Running Shorts',
-                'dress': 'Dress',
-                'shirt': 'Shirt',
-                't-shirt': 'T-Shirt',
-                'jacket': 'Jacket',
-                'hoodie': 'Hoodie',
-                'sweater': 'Sweater',
-                'jeans': 'Jeans',
-                'shorts': 'Shorts',
-                'pants': 'Pants',
-                'skirt': 'Skirt',
-                'blouse': 'Blouse',
-                'tank top': 'Tank Top',
-                'crop top': 'Crop Top',
-                'bra': 'Sports Bra',
-                'sports bra': 'Sports Bra',
-            },
-            'Footwear': {
-                'running shoe': 'Running Shoes',
-                'sneaker': 'Sneakers',
-                'boot': 'Boots',
-                'sandal': 'Sandals',
-                'heel': 'Heels',
-                'loafer': 'Loafers',
-                'trainer': 'Trainers',
-            },
-            'Sports': {
-                'yoga': 'Yoga',
-                'cycling': 'Cycling',
-                'running': 'Running',
-                'fitness': 'Fitness',
-                'gym': 'Gym',
-                'swimming': 'Swimming',
-            },
-            'Appliance': {
-                'induction': 'Induction Cooktop',
-                'gas': 'Gas Cooktop',
-                'electric': 'Electric Cooktop',
-                'rangehood': 'Rangehood',
-                'oven': 'Oven',
-                'microwave': 'Microwave',
-            },
-            'Furniture': {
-                'coffee table': 'Coffee Table',
-                'dining': 'Dining',
-                'console': 'Console',
-                'side table': 'Side Table',
-                'desk': 'Desk',
-                'chair': 'Chair',
-                'sofa': 'Sofa',
-                'bed': 'Bed',
-            },
-            'Cookware': {
-                'non-stick': 'Non-Stick',
-                'stainless': 'Stainless Steel',
-                'cast iron': 'Cast Iron',
-                'ceramic': 'Ceramic',
-            },
-            'Lighting': {
-                'pendant': 'Pendant',
-                'floor lamp': 'Floor Lamp',
-                'table lamp': 'Table Lamp',
-                'downlight': 'Downlight',
-                'chandelier': 'Chandelier',
-            },
-        }
+        """
+        Dynamically infer a more specific subtype for the primary entity using OpenAI.
 
-        hints = subtype_hints.get(entity_type, {})
-        for keyword, subtype in hints.items():
-            if keyword in text:
-                return subtype
+        Uses LRU-cached OpenAI calls to avoid repeated API requests for the same inputs.
+        Falls back gracefully if OpenAI is unavailable.
 
-        return None
+        Args:
+            entity_type: The detected category (e.g., "Food", "Apparel")
+            text: Search query or product text to analyze
+            entities: Extracted entities (currently unused, reserved for future enhancement)
+
+        Returns:
+            Inferred subtype string or None if inference fails/unavailable
+        """
+        if not text or not entity_type:
+            return None
+
+        # Truncate text to first 100 chars for efficiency (search queries are usually short)
+        text_truncated = text[:100].strip()
+
+        # Use the cached LLM function for dynamic inference
+        return _infer_subtype_from_llm(entity_type, text_truncated)
 
     def _find_evidence(self, term: str, text: str, context_chars: int = 50) -> str:
         """Find evidence snippet containing the term."""
