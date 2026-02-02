@@ -154,11 +154,16 @@ class EntityExtractor:
         """
         audit = AuditInfo()
 
-        # Step 1: Group TF-IDF terms into buckets (LLM-powered for context-aware grouping)
-        grouped_terms, noise_terms = self._group_terms(tfidf_terms, search_query=search_query)
+        # Step 1: Clean TF-IDF terms (LLM removes noise like shipping, prices, website names)
+        original_count = len(tfidf_terms)
+        clean_tfidf_terms = self._clean_tfidf_terms(tfidf_terms, search_query=search_query)
+        logger.info(f"Cleaned TF-IDF terms: {original_count} → {len(clean_tfidf_terms)} (removed {original_count - len(clean_tfidf_terms)} noise)")
+
+        # Step 2: Group clean TF-IDF terms into buckets (LLM-powered for context-aware grouping)
+        grouped_terms, noise_terms = self._group_terms(clean_tfidf_terms, search_query=search_query)
         logger.info(f"Grouped {sum(len(v) for v in grouped_terms.values())} terms, {len(noise_terms)} noise")
 
-        # Step 2: Run rules extraction (pass search_query for context-aware filtering)
+        # Step 3: Run rules extraction (pass search_query for context-aware filtering)
         rules_result = self.rules_engine.extract(
             product_name=product_name,
             tfidf_terms=tfidf_terms,
@@ -167,7 +172,7 @@ class EntityExtractor:
         )
         audit.notes.extend(rules_result.notes)
 
-        # Step 3: Determine if LLM should be invoked
+        # Step 4: Determine if LLM should be invoked
         llm_result: Optional[LLMExtractionResult] = None
 
         should_invoke, invoke_reason = self.llm_extractor.should_invoke(
@@ -186,7 +191,7 @@ class EntityExtractor:
             audit.llm_reason = invoke_reason
             logger.info(f"Invoking LLM: {invoke_reason}")
 
-            # Step 4: Run LLM extraction
+            # Step 5: Run LLM extraction
             # Pass search_query for better context about the product type
             llm_result = self.llm_extractor.extract(
                 product_name=product_name,
@@ -204,7 +209,7 @@ class EntityExtractor:
         else:
             audit.notes.append(f"LLM skipped: {invoke_reason}")
 
-        # Step 5: Merge results
+        # Step 6: Merge results
         llm_entities = llm_result.llm_entities if llm_result and llm_result.success else []
         llm_confidence = llm_result.confidence if llm_result and llm_result.success else 0.0
 
@@ -278,10 +283,13 @@ class EntityExtractor:
         Returns:
             EntityExtractionResult in original format
         """
-        # Group terms (LLM-powered for context-aware grouping)
-        grouped_terms, noise_terms = self._group_terms(tfidf_terms, search_query=search_query)
+        # Step 1: Clean TF-IDF terms (remove noise)
+        clean_tfidf_terms = self._clean_tfidf_terms(tfidf_terms, search_query=search_query)
 
-        # Run rules extraction
+        # Step 2: Group clean terms (LLM-powered for context-aware grouping)
+        grouped_terms, noise_terms = self._group_terms(clean_tfidf_terms, search_query=search_query)
+
+        # Step 3: Run rules extraction
         rules_result = self.rules_engine.extract(
             product_name=product_name,
             tfidf_terms=tfidf_terms,
@@ -315,6 +323,125 @@ class EntityExtractor:
             noise_terms=noise_terms,
             grouped_terms=grouped_terms
         )
+
+    def _clean_tfidf_terms(
+        self,
+        tfidf_terms: List[Dict],
+        search_query: Optional[str] = None
+    ) -> List[Dict]:
+        """
+        Clean TF-IDF terms using LLM to remove irrelevant/noisy terms.
+
+        This is the first LLM call in the pipeline - it filters out:
+        - Shipping/delivery terms
+        - Website/store names
+        - Generic marketing words
+        - Price-related terms
+        - Terms unrelated to the product
+
+        Args:
+            tfidf_terms: List of TF-IDF term dicts with 'phrase' key
+            search_query: Optional search query for context
+
+        Returns:
+            Filtered list of TF-IDF term dicts (only product-relevant terms)
+        """
+        if not tfidf_terms:
+            return []
+
+        # Extract phrases
+        phrases = [t.get('phrase', '').strip() for t in tfidf_terms if t.get('phrase', '').strip()]
+        if not phrases:
+            return []
+
+        # Try LLM-powered cleaning
+        client = _get_openai_client()
+        if client and OPENAI_AVAILABLE:
+            try:
+                clean_phrases = self._clean_terms_with_llm(client, phrases, search_query)
+                # Filter original tfidf_terms to keep only clean phrases
+                clean_phrases_set = set(p.lower() for p in clean_phrases)
+                return [t for t in tfidf_terms if t.get('phrase', '').strip().lower() in clean_phrases_set]
+            except Exception as e:
+                logger.warning(f"LLM term cleaning failed, returning original terms: {e}")
+
+        return tfidf_terms
+
+    def _clean_terms_with_llm(
+        self,
+        client: Any,
+        phrases: List[str],
+        search_query: Optional[str] = None
+    ) -> List[str]:
+        """
+        Use OpenAI to filter out irrelevant TF-IDF terms.
+
+        Returns only product-relevant terms, removing noise.
+        """
+        # Limit phrases for API efficiency
+        phrases_to_clean = phrases[:150]
+
+        context = f'Product search: "{search_query}"' if search_query else "General product"
+
+        prompt = f"""You are a product data analyst. Filter these TF-IDF terms extracted from product listings.
+
+{context}
+
+Terms to filter:
+{json.dumps(phrases_to_clean)}
+
+KEEP only terms that describe ACTUAL PRODUCT ATTRIBUTES:
+- Physical properties (size, color, material, pattern, fit, style)
+- Product features (pockets, buttons, zippers, sleeves)
+- Fabric/material composition (cotton, polyester, blend)
+- Care instructions (wash, dry, iron)
+- Quality indicators (premium, lightweight, durable)
+- Design elements (print, stripe, logo, graphic)
+
+REMOVE all terms that are NOT product attributes:
+- Shipping/delivery (free delivery, standard shipping, express, dispatch)
+- Store/website names (any brand or retailer names)
+- Pricing (price, sale, discount, offer, cheap, affordable)
+- Generic marketing (best, top, new, popular, trending, must-have)
+- Location/availability (australia, online, in stock, available)
+- Sizing systems alone (au, us, uk) unless with actual size
+- Random noise or incomplete phrases
+
+Return ONLY a JSON array of the KEPT terms (product-relevant only):
+["term1", "term2", "term3", ...]
+
+Be aggressive in filtering - when in doubt, remove it."""
+
+        try:
+            response = client.chat.completions.create(
+                model=getattr(Config, 'ENTITY_LLM_MODEL', 'gpt-4o-mini'),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=2000
+            )
+
+            content = response.choices[0].message.content.strip()
+
+            # Handle markdown code blocks
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+
+            clean_terms = json.loads(content)
+
+            removed_count = len(phrases_to_clean) - len(clean_terms)
+            logger.info(f"LLM cleaned TF-IDF terms: kept {len(clean_terms)}, removed {removed_count} noise terms")
+
+            return clean_terms
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse LLM cleaning response: {e}")
+            raise
+        except Exception as e:
+            logger.warning(f"LLM cleaning API call failed: {e}")
+            raise
 
     def _group_terms(
         self,

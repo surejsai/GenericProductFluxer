@@ -471,6 +471,100 @@
         align-self: flex-start;
       }
     }
+
+    /* JSON Modal Styles */
+    .json-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: none;
+      place-items: center;
+      padding: 20px;
+    }
+
+    .json-modal-overlay.active {
+      display: grid;
+    }
+
+    .json-modal {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      max-width: 900px;
+      width: 100%;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    }
+
+    .json-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .json-modal-header h3 {
+      margin: 0;
+      font-size: 16px;
+      color: var(--accent);
+    }
+
+    .json-modal-close {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .json-modal-close:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--error);
+    }
+
+    .json-modal-body {
+      flex: 1;
+      overflow: auto;
+      padding: 20px;
+    }
+
+    .json-content {
+      background: rgba(10, 12, 18, 0.9);
+      border-radius: 12px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .json-btn {
+      background: rgba(26, 30, 40, 0.9);
+      color: var(--accent-2);
+      border: 1px solid rgba(168, 179, 216, 0.3);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .json-btn:hover {
+      background: rgba(168, 179, 216, 0.15);
+      border-color: var(--accent-2);
+    }
   </style>
 </head>
 <body>
@@ -556,6 +650,19 @@
   <footer>
     © 2025 Inlined · Product Intelligence Platform
   </footer>
+
+  <!-- JSON Modal -->
+  <div class="json-modal-overlay" id="json-modal">
+    <div class="json-modal">
+      <div class="json-modal-header">
+        <h3>Firecrawl Raw Response</h3>
+        <button class="json-modal-close" id="json-modal-close">&times;</button>
+      </div>
+      <div class="json-modal-body">
+        <pre class="json-content" id="json-content"></pre>
+      </div>
+    </div>
+  </div>
 
   <script>
     // ==========================
@@ -939,9 +1046,15 @@
           <div class="product-footer">
             <span class="method-tag">${result.extraction_method || 'unknown'}</span>
             ${backupBadge}
+            ${result.raw_firecrawl_response ? `<button class="json-btn" data-json-index="${index}">View JSON</button>` : ''}
             ${result.url ? `<a href="${result.url}" target="_blank" style="color: var(--accent); font-size: 12px; text-decoration: none;">View Source →</a>` : ''}
           </div>
         `;
+
+        // Store raw JSON data for later retrieval
+        if (result.raw_firecrawl_response) {
+          card.dataset.rawJson = JSON.stringify(result.raw_firecrawl_response);
+        }
 
         grid.appendChild(card);
       });
@@ -1028,6 +1141,55 @@
       if (e.key === 'Enter') {
         const startBtnEl = safeGet('start-btn');
         if (startBtnEl) startBtnEl.click();
+      }
+    });
+
+    // ==========================
+    // JSON Modal Functions
+    // ==========================
+    function showJsonModal(jsonData) {
+      const modal = safeGet('json-modal');
+      const content = safeGet('json-content');
+      if (modal && content) {
+        content.textContent = JSON.stringify(jsonData, null, 2);
+        modal.classList.add('active');
+      }
+    }
+
+    function hideJsonModal() {
+      const modal = safeGet('json-modal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
+
+    // Close modal on button click
+    const jsonModalClose = safeGet('json-modal-close');
+    if (jsonModalClose) jsonModalClose.addEventListener('click', hideJsonModal);
+
+    // Close modal on overlay click
+    const jsonModal = safeGet('json-modal');
+    if (jsonModal) jsonModal.addEventListener('click', (e) => {
+      if (e.target === jsonModal) hideJsonModal();
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hideJsonModal();
+    });
+
+    // Event delegation for JSON buttons (handles dynamically created buttons)
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('json-btn')) {
+        const card = e.target.closest('.product-card');
+        if (card && card.dataset.rawJson) {
+          try {
+            const jsonData = JSON.parse(card.dataset.rawJson);
+            showJsonModal(jsonData);
+          } catch (err) {
+            console.error('Failed to parse JSON data:', err);
+          }
+        }
       }
     });
   </script>

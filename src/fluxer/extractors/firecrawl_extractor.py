@@ -121,6 +121,7 @@ additional_information = remaining description paragraphs."""
         self.only_main_content = only_main_content
         self.schema = custom_schema or self.DEFAULT_SCHEMA
         self.prompt = custom_prompt or self.DEFAULT_PROMPT
+        self._current_raw_data: Optional[Dict[str, Any]] = None  # Temporary storage for raw response
 
     def extract(self, url: str) -> FirecrawlProductData:
         """
@@ -205,6 +206,9 @@ additional_information = remaining description paragraphs."""
         else:
             # Fallback for direct response format
             data = response_data
+
+        # Store raw data for later access (used in _parse_response)
+        self._current_raw_data = data
 
         return self._parse_response(url, data)
 
@@ -295,8 +299,8 @@ additional_information = remaining description paragraphs."""
             meta_description=meta_description,
             extraction_method="firecrawl",
             confidence_score=confidence,
-            credits_used=credits_used
-            # Don't store raw_response to save memory
+            credits_used=credits_used,
+            raw_response=self._current_raw_data  # Store raw response for debugging/display
         )
 
     def _is_error_page(self, description: str) -> bool:

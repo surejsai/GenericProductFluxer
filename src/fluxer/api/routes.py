@@ -1,20 +1,151 @@
 """
 API routes for Fluxer application.
 """
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, Response
 from typing import Dict, Any, Optional, Union
 
 from ..extractors.html_extractor import HTMLProductExtractor
 from ..extractors.firecrawl_extractor import FirecrawlProductExtractor
 from ..search.serp_processor import SerpProcessor
-from ..seo.seo_analyzer import SEOAnalyzer
+from ..seo.seo_analyzer import SEOAnalyzer, SEOAnalysisResult
 from ..seo.description_generator import DescriptionGenerator
 from ..seo.entity_extractor import EntityExtractor
 from ..config import Config
 from ..logger import get_logger
 
 logger = get_logger(__name__)
+
+# Check OpenAI availability for TF-IDF cleaning
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logger.info("OpenAI not available for TF-IDF cleaning")
+
+# Global OpenAI client (lazy initialization)
+_tfidf_openai_client: Optional[Any] = None
+
+
+def _get_tfidf_openai_client() -> Optional[Any]:
+    """Get or initialize the OpenAI client for TF-IDF cleaning."""
+    global _tfidf_openai_client
+    if _tfidf_openai_client is None and OPENAI_AVAILABLE:
+        api_key = Config.OPENAI_API_KEY
+        if api_key:
+            _tfidf_openai_client = OpenAI(api_key=api_key)
+            logger.debug("OpenAI client initialized for TF-IDF cleaning")
+    return _tfidf_openai_client
+
+
+def clean_tfidf_phrases(
+    result: SEOAnalysisResult,
+    search_query: Optional[str] = None
+) -> SEOAnalysisResult:
+    """
+    Clean TF-IDF phrases using LLM to remove noise.
+
+    Filters out:
+    - Shipping/delivery terms
+    - Website/store names
+    - Generic marketing words
+    - Price-related terms
+    - Terms unrelated to product attributes
+
+    Args:
+        result: SEOAnalysisResult with phrases to clean
+        search_query: Optional search query for context
+
+    Returns:
+        SEOAnalysisResult with cleaned phrases
+    """
+    if not result.phrases:
+        return result
+
+    client = _get_tfidf_openai_client()
+    if not client or not OPENAI_AVAILABLE:
+        logger.warning("OpenAI not available for TF-IDF cleaning, returning original results")
+        return result
+
+    # Extract phrase strings
+    phrases_to_clean = [p.phrase for p in result.phrases[:150]]  # Limit for API efficiency
+
+    context = f'Product search: "{search_query}"' if search_query else "General product"
+
+    prompt = f"""You are a product data analyst. Filter these TF-IDF terms extracted from product listings.
+
+{context}
+
+Terms to filter:
+{json.dumps(phrases_to_clean)}
+
+KEEP only terms that describe ACTUAL PRODUCT ATTRIBUTES:
+- Physical properties (size, color, material, pattern, fit, style)
+- Product features (pockets, buttons, zippers, sleeves)
+- Fabric/material composition (cotton, polyester, blend)
+- Care instructions (wash, dry, iron)
+- Quality indicators (premium, lightweight, durable)
+- Design elements (print, stripe, logo, graphic)
+
+REMOVE all terms that are NOT product attributes:
+- Shipping/delivery (free delivery, standard shipping, express, dispatch, orders)
+- Store/website names (any brand or retailer names)
+- Pricing (price, sale, discount, offer, cheap, affordable)
+- Generic marketing (best, top, new, popular, trending, must-have)
+- Return/exchange policies (returned, exchanged, refund)
+- Location/availability (australia, online, in stock, available)
+- Sizing systems alone (au, us, uk) unless with actual size
+- Random noise or incomplete phrases
+
+Return ONLY a JSON array of the KEPT terms (product-relevant only):
+["term1", "term2", "term3", ...]
+
+Be aggressive in filtering - when in doubt, remove it."""
+
+    try:
+        response = client.chat.completions.create(
+            model=getattr(Config, 'ENTITY_LLM_MODEL', 'gpt-4o-mini'),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=2000
+        )
+
+        content = response.choices[0].message.content.strip()
+
+        # Handle markdown code blocks
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+            content = content.strip()
+
+        clean_phrases_list = json.loads(content)
+        clean_phrases_set = set(p.lower() for p in clean_phrases_list)
+
+        # Filter original phrases to keep only clean ones
+        cleaned_phrases = [p for p in result.phrases if p.phrase.lower() in clean_phrases_set]
+
+        removed_count = len(result.phrases) - len(cleaned_phrases)
+        logger.info(f"TF-IDF cleaning: kept {len(cleaned_phrases)}, removed {removed_count} noise terms")
+
+        # Create new result with cleaned phrases
+        return SEOAnalysisResult(
+            phrases=cleaned_phrases,
+            total_products=result.total_products,
+            total_documents=result.total_documents,
+            analysis_timestamp=datetime.now(timezone.utc).isoformat(),
+            config=result.config
+        )
+
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse LLM cleaning response: {e}")
+        return result
+    except Exception as e:
+        logger.warning(f"TF-IDF cleaning failed, returning original results: {e}")
+        return result
 
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -321,6 +452,7 @@ def extract_batch() -> tuple[Dict[str, Any], int]:
                         result_dict['product_name'] = getattr(result, 'product_name', None)
                         result_dict['features'] = getattr(result, 'features', None)
                         result_dict['additional_information'] = getattr(result, 'additional_information', None)
+                        result_dict['raw_firecrawl_response'] = getattr(result, 'raw_response', None)
 
                     return result_dict
                 else:
@@ -474,8 +606,10 @@ def analyze_seo() -> tuple[Dict[str, Any], int]:
         "config": {  // Optional
             "top_n": 200,
             "min_df": 2,
-            "brands": ["brand1", "brand2"]
-        }
+            "brands": ["brand1", "brand2"],
+            "clean_tfidf": true  // Enable LLM cleaning (default: true)
+        },
+        "search_query": "optional search query for context"
     }
 
     Returns:
@@ -491,6 +625,7 @@ def analyze_seo() -> tuple[Dict[str, Any], int]:
         data = request.get_json()
         products = data.get('products', [])
         config = data.get('config', {})
+        search_query = data.get('search_query')
 
         if not products:
             return jsonify({
@@ -511,6 +646,12 @@ def analyze_seo() -> tuple[Dict[str, Any], int]:
         result = analyzer.analyze(products)
 
         logger.info(f"SEO analysis complete: {result.unique_phrases} phrases extracted")
+
+        # Clean TF-IDF phrases using LLM (enabled by default)
+        if config.get('clean_tfidf', True):
+            logger.info("Cleaning TF-IDF phrases with LLM...")
+            result = clean_tfidf_phrases(result, search_query=search_query)
+            logger.info(f"After cleaning: {result.unique_phrases} phrases remain")
 
         return jsonify({
             'status': 'success',
@@ -537,8 +678,10 @@ def analyze_seo_from_extraction() -> tuple[Dict[str, Any], int]:
         "results": [...],  // Results from extract-batch
         "config": {  // Optional
             "top_n": 200,
-            "min_df": 2
-        }
+            "min_df": 2,
+            "clean_tfidf": true  // Enable LLM cleaning (default: true)
+        },
+        "search_query": "optional search query for context"
     }
 
     Returns:
@@ -551,6 +694,7 @@ def analyze_seo_from_extraction() -> tuple[Dict[str, Any], int]:
         data = request.get_json()
         results = data.get('results', [])
         config = data.get('config', {})
+        search_query = data.get('search_query')
 
         if not results:
             return jsonify({
@@ -571,6 +715,12 @@ def analyze_seo_from_extraction() -> tuple[Dict[str, Any], int]:
         result = analyzer.analyze_from_extraction_results(results)
 
         logger.info(f"SEO analysis complete: {result.unique_phrases} phrases extracted")
+
+        # Clean TF-IDF phrases using LLM (enabled by default)
+        if config.get('clean_tfidf', True):
+            logger.info("Cleaning TF-IDF phrases with LLM...")
+            result = clean_tfidf_phrases(result, search_query=search_query)
+            logger.info(f"After cleaning: {result.unique_phrases} phrases remain")
 
         return jsonify({
             'status': 'success',
