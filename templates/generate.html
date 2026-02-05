@@ -493,6 +493,74 @@
       }
     }
 
+    /* Product Data Input */
+    .product-data-section {
+      margin-bottom: 24px;
+    }
+
+    .product-data-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .product-data-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .product-data-input {
+      width: 100%;
+      min-height: 150px;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-family: "Space Grotesk", "Manrope", system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+      transition: border-color 0.2s ease;
+    }
+
+    .product-data-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .product-data-input::placeholder {
+      color: var(--muted);
+      opacity: 0.6;
+    }
+
+    /* Key Features section */
+    .key-features-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(212, 175, 90, 0.1);
+    }
+
+    .key-features-list {
+      list-style: none;
+      padding: 0;
+      margin: 12px 0 0;
+    }
+
+    .key-features-list li {
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      background: rgba(82, 199, 122, 0.05);
+      border-left: 3px solid var(--success);
+      border-radius: 0 8px 8px 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+
     .hidden {
       display: none !important;
     }
@@ -567,6 +635,24 @@
         <div class="stat-value" id="stat-words">-</div>
         <div class="stat-label">Word Count</div>
       </div>
+    </div>
+
+    <!-- Product Data Input -->
+    <div class="product-data-section">
+      <label class="product-data-label">Product Data (optional)</label>
+      <p class="product-data-hint">Paste the product name, description, specifications, features, and materials. This becomes the source of truth for factual claims.</p>
+      <textarea
+        class="product-data-input"
+        id="product-data-input"
+        placeholder="Example:
+Product: Stainless Steel Insulated Water Bottle 750ml
+- Double-wall vacuum insulation
+- Keeps drinks cold for 24 hours, hot for 12 hours
+- BPA-free, food-grade 18/8 stainless steel
+- Leak-proof lid with carry loop
+- Dimensions: 27cm x 7.5cm
+- Weight: 350g"
+      ></textarea>
     </div>
 
     <!-- Action Bar -->
@@ -650,6 +736,11 @@
           <div class="keywords-label">Entities Used</div>
           <div class="primary-entity" id="result-primary-entity"></div>
           <div class="entities-list" id="result-entities"></div>
+        </div>
+
+        <div class="key-features-section hidden" id="key-features-section">
+          <div class="keywords-label">Key Features</div>
+          <ul class="key-features-list" id="key-features-list"></ul>
         </div>
       </div>
     </div>
@@ -804,11 +895,16 @@
       loadingState.classList.remove('hidden');
 
       try {
+        // Get product data from textarea
+        const productDataInput = safeGet('product-data-input');
+        const productData = productDataInput ? productDataInput.value.trim() : '';
+
         // Build request body with optional entities
         const requestBody = {
           products: extractionResults,
           keywords: seoKeywords,
           search_query: searchQuery,  // Pass search query for generic naming
+          product_data: productData,  // Product data from text input
           config: {
             model: 'gpt-4o-mini',
             temperature: 0.7
@@ -949,6 +1045,21 @@
         // Hide entities section if no entity data
         entitiesSection.classList.add('hidden');
       }
+
+      // Render key features
+      const keyFeaturesSection = safeGet('key-features-section');
+      const keyFeaturesList = safeGet('key-features-list');
+
+      if (keyFeaturesSection && keyFeaturesList) {
+        if (generatedDescription.key_features && generatedDescription.key_features.length > 0) {
+          keyFeaturesSection.classList.remove('hidden');
+          keyFeaturesList.innerHTML = generatedDescription.key_features
+            .map(f => `<li>${escapeHtml(f)}</li>`)
+            .join('');
+        } else {
+          keyFeaturesSection.classList.add('hidden');
+        }
+      }
     }
 
     // Copy description to clipboard
@@ -956,7 +1067,11 @@
       if (!generatedDescription || !generatedDescription.description) return;
 
       try {
-        await navigator.clipboard.writeText(generatedDescription.description);
+        let copyText = generatedDescription.description;
+        if (generatedDescription.key_features && generatedDescription.key_features.length > 0) {
+          copyText += '\n\nKey Features:\n' + generatedDescription.key_features.map(f => '- ' + f).join('\n');
+        }
+        await navigator.clipboard.writeText(copyText);
 
         copyBtn.classList.add('copied');
         copyBtn.innerHTML = `

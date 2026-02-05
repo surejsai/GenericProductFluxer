@@ -862,6 +862,7 @@ def generate_description() -> tuple[Dict[str, Any], int]:
         entities = data.get('entities')  # Optional entity analysis result
         product_name_override = data.get('product_name')
         search_query = data.get('search_query', '')  # Use search query as generic product name
+        product_data = data.get('product_data', '')  # Product data from text input
         config = data.get('config', {})
 
         # Prefer search_query over product_name for generic naming
@@ -894,7 +895,8 @@ def generate_description() -> tuple[Dict[str, Any], int]:
             products=products,
             keywords=keywords,
             product_name=product_name_override,
-            entities=entities
+            entities=entities,
+            product_data=product_data
         )
 
         if not result.success:
@@ -911,6 +913,7 @@ def generate_description() -> tuple[Dict[str, Any], int]:
                 'product_name': result.product_name,
                 'price': result.price,
                 'description': result.description,
+                'key_features': result.key_features,
                 'word_count': result.word_count,
                 'keywords_used': result.keywords_used,
                 'model_used': result.model_used,

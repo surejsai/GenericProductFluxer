@@ -24,32 +24,78 @@ logger = get_logger(__name__)
 
 # System message for ChatGPT
 SYSTEM_MESSAGE = """You are a professional ecommerce SEO copywriter.
-Write accurate, natural product descriptions.
-Never invent features, materials, sizes, performance claims, or specifications.
-Only use facts that appear in the provided Source Text.
-IMPORTANT: NEVER include brand names, manufacturer names, or specific product model numbers in your output."""
+Write accurate, natural product descriptions and key features in Australian English.
+Write like you're explaining the product to an 18-year-old in simple, everyday language.
+Never invent facts."""
 
 
 # User prompt template
-USER_PROMPT_TEMPLATE = """Write ONE SEO-friendly product description paragraph (70–120 words).
+USER_PROMPT_TEMPLATE = """Write ONE SEO-friendly product description (150-300 words) AND key feature bullets in Australian English.
 
-Generic product type: {product_name}
-Price (optional mention): {price}
+=== FACTS (what the product actually is - ONLY source of truth) ===
 
-Source Text (facts only, do not go beyond this):
-{source_text}
+PRODUCT DATA:
+{product_data}
+- Title, specs, features, materials, dimensions
+- Use ONLY this for factual claims
 
-Recommended Keywords / Phrases (use 6–10 naturally, no stuffing):
+Analysis DATA:
+Price: {price}
+Generic type: {product_name}
+Source text: {source_text}
+
+=== LANGUAGE (how to describe it - vocabulary only, NOT facts) ===
+
+Keywords (competitive vocabulary to use naturally):
 {keywords_list}
+
+Entities (semantic patterns for SEO):
 {entities_section}
-Guidelines:
-- CRITICAL: Do NOT mention any brand names, manufacturer names, or specific product model numbers (e.g., no "Westinghouse", "Samsung", "WRF610SA", etc.).
-- First sentence: describe the generic product type with a primary keyword.
-- Middle: weave in remaining keywords while describing real features from Source Text.
-- End: brief benefit statement or call-to-action.
-- Do NOT hallucinate specs, dimensions, or features not in Source Text.
-- Output ONLY the paragraph—no headings, bullet points, or meta commentary.
-- Write as if describing a generic product category, not a specific branded item."""
+
+=== HOW TO WRITE ===
+
+Facts vs Language:
+- PRODUCT DATA = what to claim (specs, features, materials)
+- Keywords/Entities = how to phrase it (vocabulary, semantic terms)
+- Never claim features not in PRODUCT DATA, even if in Keywords
+
+Description (150-300 words):
+- Start with what the product is and its main purpose
+- Describe key specifications and features from PRODUCT DATA
+- Include usage context and scenarios where relevant
+- Weave in Keywords/Entities naturally for semantic SEO
+- Write for both search engines (semantic relevance) and humans (readability)
+- Use simple, everyday language
+- Break into 1-3 natural paragraphs if it flows better, if sufficient data exist
+
+Key Features:
+- Extract the most important and relevant features from PRODUCT DATA
+- Focus on quality over quantity - only include meaningful features
+- Each feature should be clear, specific, and supported by data
+- Use Keywords/Entities vocabulary to phrase features
+- Consider user context - what matters to someone buying this?
+- Mix specifications with usage/benefit context where data supports it
+- Modern SEO: semantic relevance and user intent over keyword stuffing
+
+Tone:
+- Simple, everyday language (like talking to an 18-year-old)
+- Australian English spelling (litre, colour, organise)
+- No hype or overselling
+- Conversational but informative
+- No excessive punctuation like em dashes
+
+=== OUTPUT FORMAT ===
+
+Return valid JSON only:
+
+{{
+  "description": "Product description paragraph(s), 150-300 words total",
+  "key_features": [
+    "Feature 1 - supported by PRODUCT DATA",
+    "Feature 2 - supported by PRODUCT DATA",
+    "Feature 3 - supported by PRODUCT DATA"
+  ]
+}}"""
 
 
 @dataclass
@@ -65,6 +111,7 @@ class GeneratedDescription:
     products_combined: int = 1
     success: bool = True
     error: Optional[str] = None
+    key_features: List[str] = field(default_factory=list)
     entities_used: bool = False
     primary_entity_path: Optional[str] = None
     supporting_entities: List[str] = None
@@ -87,8 +134,8 @@ class DescriptionGenerator:
     """
     model: str = "gpt-4o-mini"
     temperature: float = 0.7
-    max_tokens: int = 300
-    target_word_count: tuple = (70, 120)
+    max_tokens: int = 800
+    target_word_count: tuple = (150, 300)
     keywords_to_use: tuple = (6, 10)
     api_key: Optional[str] = None
 
@@ -259,7 +306,8 @@ class DescriptionGenerator:
         keywords: List[Dict],
         product_name: Optional[str] = None,
         price: Optional[str] = None,
-        entities: Optional[Dict] = None
+        entities: Optional[Dict] = None,
+        product_data: Optional[str] = None
     ) -> GeneratedDescription:
         """
         Generate a single SEO-optimized description from all products and keywords.
@@ -350,6 +398,7 @@ class DescriptionGenerator:
 
         # Build user prompt
         user_prompt = USER_PROMPT_TEMPLATE.format(
+            product_data=product_data or "No product data provided",
             product_name=final_product_name,
             price=final_price or "N/A",
             source_text=source_text,
@@ -369,11 +418,30 @@ class DescriptionGenerator:
                 max_tokens=self.max_tokens
             )
 
-            # Extract generated description
-            description = response.choices[0].message.content.strip()
+            # Extract and parse JSON response
+            description_raw = response.choices[0].message.content.strip()
+
+            try:
+                # Handle markdown code blocks
+                content = description_raw
+                if content.startswith("```"):
+                    content = content.split("```")[1]
+                    if content.startswith("json"):
+                        content = content[4:]
+                    content = content.strip()
+
+                parsed = json.loads(content)
+                description = parsed.get("description", "")
+                key_features = parsed.get("key_features", [])
+            except (json.JSONDecodeError, KeyError):
+                # Fallback: treat entire response as description
+                logger.warning("Failed to parse JSON response, using raw text as description")
+                description = description_raw
+                key_features = []
+
             word_count = len(description.split())
 
-            logger.info(f"Generated description for '{final_product_name}': {word_count} words (from {len(products)} products, entities_used={entities_used})")
+            logger.info(f"Generated description for '{final_product_name}': {word_count} words, {len(key_features)} features (from {len(products)} products, entities_used={entities_used})")
 
             return GeneratedDescription(
                 product_name=final_product_name,
@@ -385,6 +453,7 @@ class DescriptionGenerator:
                 model_used=self.model,
                 products_combined=len(products),
                 success=True,
+                key_features=key_features,
                 entities_used=entities_used,
                 primary_entity_path=primary_entity_path,
                 supporting_entities=supporting_entity_names if supporting_entity_names else None
