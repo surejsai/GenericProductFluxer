@@ -876,7 +876,6 @@
         <div class="confidence-bar">
           <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
         </div>
-        <span class="llm-badge skipped" id="llmBadge">Rules Only</span>
       </div>
 
       <!-- Confidence Explanation (hidden by default) -->
@@ -1145,20 +1144,6 @@
       if (confidenceFill) {
         confidenceFill.style.width = confidencePercent + '%';
         confidenceFill.className = 'confidence-fill ' + confidenceClass;
-      }
-
-      // LLM badge
-      const llmBadge = safeGet('llmBadge');
-      if (llmBadge) {
-        if (data.audit && data.audit.llm_invoked) {
-          llmBadge.textContent = 'LLM Used';
-          llmBadge.className = 'llm-badge invoked';
-          llmBadge.title = data.audit.llm_reason || 'LLM was invoked';
-        } else {
-          llmBadge.textContent = 'Rules Only';
-          llmBadge.className = 'llm-badge skipped';
-          llmBadge.title = 'LLM extraction was not needed';
-        }
       }
 
       // Primary Entity Path
