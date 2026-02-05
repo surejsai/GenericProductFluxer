@@ -86,6 +86,7 @@ Tone:
 - Conversational but informative
 - No excessive punctuation like em dashes
 
+
 === OUTPUT FORMAT ===
 
 Return valid JSON only:
@@ -97,7 +98,27 @@ Return valid JSON only:
     "Feature 2 - supported by PRODUCT DATA",
     "Feature 3 - supported by PRODUCT DATA"
   ]
-}}"""
+}}
+=== SELF-CHECK BEFORE FINALIZING ===
+
+Before outputting, verify every claim:
+
+1. Read through your draft description and key features
+2. For each factual statement (color, size, material, spec, feature):
+   - Is this explicitly stated in PRODUCT DATA?
+   - YES → Keep it
+   - NO → Remove it, even if it's in Keywords/Entities
+
+3. Common violations to check:
+   - Colors (black, white, navy) - only if in PRODUCT DATA
+   - Sizes/dimensions - only exact values from PRODUCT DATA
+   - Materials - only if specified in PRODUCT DATA
+   - Weight claims (lightweight, heavy) - only if weight is in PRODUCT DATA
+   - Performance specs - only if numbers are in PRODUCT DATA
+
+4. Rewrite your draft removing any unsupported claims
+5. Output the verified version only
+"""
 
 
 @dataclass
