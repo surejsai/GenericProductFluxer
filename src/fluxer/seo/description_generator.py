@@ -55,9 +55,11 @@ Entities (semantic patterns for SEO):
 === HOW TO WRITE ===
 
 Facts vs Language:
-- PRODUCT DATA = what to claim (specs, features, materials)
-- Keywords/Entities = how to phrase it (vocabulary, semantic terms)
-- Never claim features not in PRODUCT DATA, even if in Keywords
+- PRODUCT DATA = the ONLY source of factual claims
+- Keywords/Entities = vocabulary patterns for phrasing, NOT facts
+- Some entities are product attributes (colors, sizes, materials, dimensions)
+- If an attribute appears in Keywords/Entities but NOT in PRODUCT DATA, don't use it
+- Only describe what actually exists in PRODUCT DATA
 
 Description (150-300 words):
 - Start with what the product is and its main purpose

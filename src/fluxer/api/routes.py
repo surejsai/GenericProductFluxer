@@ -369,7 +369,7 @@ def extract_batch() -> tuple[Dict[str, Any], int]:
             },
             ...
         ],
-        "target_count": 5  // Optional, default 5
+        "target_count": 8  // Optional, default 8
     }
 
     Returns:
@@ -383,7 +383,7 @@ def extract_batch() -> tuple[Dict[str, Any], int]:
     try:
         data = request.get_json()
         products = data.get('products', [])
-        target_count = data.get('target_count', 5)
+        target_count = data.get('target_count', 8)
 
         if not products:
             return jsonify({
